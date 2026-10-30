@@ -26,7 +26,7 @@ Update an existing project installation:
 npx skills update under-the-hood
 ```
 
-Add `-g` for a global installation. An installation pinned to a release stays on that release; run the default install command above to follow the current version.
+Add `-g` for a global installation. To reinstall the same fixed release, use its release-specific install command.
 
 ## Skills
 
