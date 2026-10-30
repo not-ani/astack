@@ -12,6 +12,22 @@ npx skills add not-ani/astack --skill under-the-hood
 
 Choose your coding agent when prompted. Add `-g` to install globally instead of in the current project.
 
+This command installs the current files from GitHub. To install the fixed `v1.0.0` release:
+
+```bash
+npx skills add https://github.com/not-ani/astack/tree/v1.0.0 --skill under-the-hood
+```
+
+## Update
+
+Update an existing project installation:
+
+```bash
+npx skills update under-the-hood
+```
+
+Add `-g` for a global installation. An installation pinned to a release stays on that release; run the default install command above to follow the current version.
+
 ## Skills
 
 - [under-the-hood](skills/under-the-hood/SKILL.md) creates an interactive HTML slideshow that explains a PR, branch, or subsystem through its data shapes and state transitions. Includes the slideshow template, build scripts, and fonts.

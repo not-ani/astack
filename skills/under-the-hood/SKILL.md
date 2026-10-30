@@ -1,6 +1,8 @@
 ---
 name: "under-the-hood"
 description: "Explain a PR, branch, or subsystem through its data shapes, runtime flow, and state transitions in an interactive HTML slideshow. Use for code walkthroughs, onboarding, design reviews, or whiteboard preparation."
+metadata:
+  version: "1.0.0"
 ---
 
 # Under the hood
