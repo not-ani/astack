@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subsystem: under the hood</title>
+<!--
+  Template for an under-the-hood slideshow. Copy this folder to <project>/src,
+  replace the example slides with your own, then build one offline file:
+
+    node src/build.mjs          # writes <project>/index.html with the fonts inlined
+    node src/shoot.mjs          # screenshots every slide and step into <project>/shots
+
+  The example slides are a pattern gallery, not an outline. Each shows one way
+  to draw something (a flow, code, a state machine, a decision, a lifecycle, a
+  journey, a whiteboard question). Keep the patterns that fit; delete the rest.
+  The shell (theme, navigation, step engine, outline, notes, narrow fallback)
+  should not need changes.
+-->
+<style>
+/*@FONTS@*/
+:root{
+  --bg:#0b0b0b;--panel:#131313;--line:#2b2b2b;--strong:#4a4a4a;--text:#ededed;--muted:#a0a0a0;--faint:#6a6a6a;--accent:#ff5a4e;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --pad:0px;--bar:44px;--side:300px;--s:.5;
+}
+.standalone{--pad:28px;--bar:56px}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text)}
+body{font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,a{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--text);outline-offset:3px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- Shell ---------- */
+#app{display:grid;grid-template-columns:0 minmax(0,1fr);height:100vh;transition:grid-template-columns .25s ease}
+.side-open #app{grid-template-columns:var(--side) minmax(0,1fr)}
+#side{overflow:hidden;border-right:1px solid var(--line);background:#0e0e0e;visibility:hidden}
+.side-open #side{visibility:visible}
+#side .inner{width:var(--side);height:100%;overflow-y:auto;padding:22px 14px 40px 18px}
+#side h2{font-size:15px;font-weight:600;margin:0 0 14px 6px;color:var(--muted)}
+#side ol{list-style:none;margin:0;padding:0}
+#side .chap{margin:0 0 10px}
+#side .chap > a{display:flex;gap:10px;padding:6px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px}
+#side .chap > a .n{font-family:var(--mono);color:var(--faint);font-weight:500}
+#side .chap ol a{display:block;padding:4px 6px 4px 36px;border-radius:6px;text-decoration:none;color:var(--muted);font-size:14px;line-height:1.35;position:relative}
+#side a:hover{background:#1a1a1a;color:var(--text)}
+#side a[aria-current="true"]{background:#1d1d1d;color:var(--text)}
+#side .chap ol a[aria-current="true"]::before{content:"";position:absolute;left:22px;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--text)}
+.standalone #side .chap > a{font-size:16px}
+.standalone #side .chap ol a{font-size:15px}
+
+#main{display:flex;flex-direction:column;min-width:0;height:100vh}
+#view{position:relative;flex:1;min-height:0;overflow:hidden}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%) scale(var(--s));transform-origin:center;background:var(--bg)}
+.standalone #stage{box-shadow:0 0 0 1px #1c1c1c;border-radius:4px}
+
+#notes{display:none;border-top:1px solid var(--line);background:#0f0f0f;padding:12px 20px 14px;font-size:16px;line-height:1.5;color:var(--text);max-height:28vh;overflow:auto}
+.notes-open #notes{display:block}
+#notes .lab{display:block;color:var(--faint);font-size:13px;margin-bottom:2px}
+.standalone #notes{font-size:19px;padding:16px 32px 18px}
+.standalone #notes .lab{font-size:14px}
+
+#bar{position:relative;height:var(--bar);flex:none;display:flex;align-items:center;gap:6px;padding:0 10px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+.standalone #bar{padding:0 22px;font-size:15px;gap:10px}
+#progress{position:absolute;left:0;top:-1px;height:2px;background:var(--text);width:0;transition:width .3s ease}
+#bar button,#bar a.btn{background:none;border:1px solid transparent;border-radius:7px;padding:5px 9px;cursor:pointer;color:var(--muted);text-decoration:none;white-space:nowrap}
+#bar button:hover,#bar a.btn:hover{color:var(--text);border-color:var(--line)}
+#bar button[aria-pressed="true"]{color:var(--text);border-color:var(--strong)}
+#bar kbd{font-family:var(--mono);font-size:.85em;color:var(--faint);margin-left:5px}
+#where{min-width:0;flex:1;display:flex;align-items:center;gap:12px;overflow:hidden}
+#where .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+#where .c{white-space:nowrap;font-family:var(--mono);font-size:.9em;color:var(--faint)}
+#pips{display:flex;gap:5px;align-items:center;flex-wrap:nowrap}
+#pips button{width:12px;height:12px;padding:0!important;border-radius:50%!important;border:1.5px solid var(--strong)!important;background:transparent}
+#pips button.done{background:var(--strong)}
+#pips button.cur{background:var(--text);border-color:var(--text)!important}
+.arrows{display:flex;gap:2px}
+.no-video .needs-video{display:none!important}
+
+dialog#help{background:#121212;color:var(--text);border:1px solid var(--strong);border-radius:14px;padding:22px 26px;max-width:560px;width:calc(100% - 40px)}
+dialog#help::backdrop{background:rgba(0,0,0,.6)}
+#help h2{margin:0 0 12px;font-size:18px}
+#help table{border-collapse:collapse;width:100%;font-size:15px}
+#help td{padding:6px 0;vertical-align:top;border-top:1px solid var(--line)}
+#help td:first-child{font-family:var(--mono);color:var(--muted);width:46%;padding-right:12px}
+#help p{color:var(--muted);font-size:14px;margin:14px 0 0}
+#help button{margin-top:14px;background:none;border:1px solid var(--strong);color:var(--text);border-radius:8px;padding:6px 12px;cursor:pointer}
+
+/* ---------- Slides: a fixed 1920x1080 canvas, scaled to the window ---------- */
+.sl{display:none}
+.deck .sl.cur{display:block}
+.deck .fscroll,.deck .frame{display:contents}
+.deck .ftext{display:none}
+.slide{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
+.deck .sl.cur .slide{animation:slidein .28s ease}
+@keyframes slidein{from{opacity:0}to{opacity:1}}
+.layer{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:visible;pointer-events:none}
+svg text{font-family:var(--sans)}
+svg .m{font-family:var(--mono)}
+.lbl{fill:var(--faint);font-size:26px;font-weight:500}
+.hdr{position:absolute;left:120px;top:64px;display:flex;gap:18px;align-items:baseline;line-height:1}
+.hdr .hn{font:500 28px var(--mono);color:var(--faint)}
+.hdr .ht{font:600 30px var(--sans);color:var(--muted)}
+.rail{position:absolute;left:1240px;top:74px;display:flex;gap:8px}
+.rail i{display:block;flex:1;max-width:55px;min-width:20px;height:6px;border-radius:3px;background:var(--line)}
+.rail i.p{background:var(--strong)}.rail i.c{background:var(--text)}
+.cap{position:absolute;left:120px;top:922px;width:1680px;margin:0;font:500 34px/1.3 var(--sans);color:var(--text)}
+.cap.in{animation:capin .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes capin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.cap code,.ftext code{font-family:var(--mono);font-size:.9em;font-weight:500}
+.hint{margin:0;position:absolute;font:500 24px var(--sans);color:var(--faint)}
+
+/* builds: data-on hides an element outside its steps */
+[data-on]{transition:opacity .45s ease,transform .55s cubic-bezier(.2,.8,.2,1)}
+.off{opacity:0!important;transform:translateY(18px);pointer-events:none}
+svg .off{transform:translateY(18px)}
+
+/* nodes */
+.node rect{fill:var(--panel);stroke:var(--strong);stroke-width:2;transition:fill .35s ease,stroke .35s ease,stroke-width .35s ease}
+.node .t{fill:var(--text);font-size:26px;font-weight:600;transition:fill .35s}
+.node.mono .t{font-family:var(--mono);font-size:24px;font-weight:500}
+.node .s{fill:var(--muted);font-size:24px;font-weight:400;transition:fill .35s}
+.node.strong rect,.node.reached rect{stroke:var(--text)}
+.node.muted rect{stroke:var(--muted)}
+.node.cur rect{stroke:var(--text);stroke-width:3.5;fill:#1c1c1c}
+.node.active rect{fill:var(--text);stroke:var(--text)}
+.node.active .t{fill:var(--bg)}.node.active .s{fill:#3a3a3a}
+.node.warn rect{stroke:var(--accent)}
+.node.dim{opacity:.4}
+.node.dimmed rect{stroke:var(--line)}
+.node:not([data-on]){transition:opacity .35s}
+/* edges: e-hl draws itself along the path when .lit is added */
+.edge .e-base{fill:none;stroke:var(--strong);stroke-width:2;stroke-linejoin:round}
+.edge .e-hl{fill:none;stroke:var(--text);stroke-width:2.5;stroke-linejoin:round;stroke-dasharray:1 1;stroke-dashoffset:1;transition:stroke-dashoffset .75s ease-in-out,stroke .3s,stroke-width .3s}
+.edge.lit .e-hl{stroke-dashoffset:0}
+.edge .e-head{fill:var(--strong);transition:fill .25s ease .45s}
+.edge.lit .e-head{fill:var(--text)}
+.edge.dashed .e-base{stroke-dasharray:8 7}
+.edge.dashed .e-hl{stroke-dasharray:8 7;stroke-dashoffset:0;opacity:0;transition:opacity .5s}
+.edge.dashed.lit .e-hl{opacity:1}
+.edge.muted .e-hl{stroke:var(--muted)}.edge.muted.lit .e-head{fill:var(--muted)}
+.edge.cur .e-hl{stroke-width:3.5}
+.edge.red.lit .e-hl{stroke:var(--accent)}.edge.red.lit .e-head{fill:var(--accent)}
+/* trail edges: invisible until lit, then fade to grey once the next path is current */
+.edge.trail.lit:not(.cur) .e-hl{stroke:var(--strong);stroke-width:1.5}
+.edge.trail.lit:not(.cur) .e-head{fill:var(--strong)}
+.edge.trail .e-base{stroke:transparent}.edge.trail .e-head{fill:transparent}
+.edge.trail.lit .e-head{fill:var(--text)}
+.edge.trail.red.cur .e-hl{stroke:var(--accent)}.edge.trail.red.cur.lit .e-head{fill:var(--accent)}
+.elabel{fill:var(--faint);font-size:24px;font-weight:500}
+/* packet: a labelled pill that travels an edge */
+.packet{opacity:0;pointer-events:none}
+.packet rect{fill:var(--text)}
+.packet.red rect{fill:var(--accent)}
+.packet text{fill:var(--bg);font-family:var(--mono);font-size:24px;font-weight:500}
+/* chips */
+.chip rect.b{fill:var(--panel);stroke:var(--strong);stroke-width:1.5;transition:fill .35s,stroke .35s}
+.chip text{fill:var(--muted);font-size:24px;font-weight:500;transition:fill .35s}
+.chip.m text{font-family:var(--mono)}
+.chip.lit rect.b{fill:var(--text);stroke:var(--text)}
+.chip.lit text{fill:var(--bg)}
+.chip.strong rect.b{stroke:var(--text)}
+.chip.strong text{fill:var(--text)}
+.chip.strong.lit text{fill:var(--bg)}
+.lit-text{transition:fill .35s,opacity .35s}
+.tag{fill:var(--faint);transition:fill .35s}.tag.lit{fill:var(--text)}
+.dimmable{transition:opacity .35s}.dimmable.dim{opacity:.35}
+.wbdot{fill:var(--line)}.wbdot.done{fill:var(--strong)}.wbdot.cur{fill:var(--text)}
+/* visit: nodes light one after another; set --d per node */
+.visit{transition-delay:var(--d,0s)}
+.visit rect{transition-delay:var(--d,0s)}
+/* "what this hop carries" pill */
+.carry .cv{display:inline-block;font:500 26px var(--mono);color:var(--bg);background:var(--text);border-radius:21px;padding:4px 16px}
+.carry .cv:empty{display:none}
+
+/* code panels: real selectable text; a band slides to the step's lines */
+.code{position:absolute;background:var(--panel);border:1.5px solid var(--strong);border-radius:14px}
+.code::before{content:"";position:absolute;left:0;right:0;top:51px;border-top:1.5px solid var(--line)}
+.code .file{position:absolute;left:28px;top:0;height:52px;line-height:54px;font:400 24px var(--mono);color:var(--faint);white-space:nowrap}
+.code .lines{position:absolute;left:32px;right:12px;top:62px}
+.code .ln{height:36px;line-height:36px;white-space:pre;font:500 24px var(--mono);color:var(--text);transition:opacity .4s ease;position:relative}
+.code.has-step .ln{opacity:.42}
+.code .ln.hl{opacity:1}
+.code .band{position:absolute;left:6px;right:6px;border-radius:6px;background:#1f1f1f;opacity:0;transition:top .45s cubic-bezier(.2,.8,.2,1),height .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.code .band::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px;background:var(--text)}
+.code .band.on{opacity:1}
+.k{color:#fff;font-weight:600}.ty{color:#d8d8d8}.str{color:#b9b9b9}.num{color:#e6e6e6}.com{color:#8e8e8e;font-weight:400}.pun{color:#9d9d9d}
+
+/* journey */
+.track{position:absolute;left:120px;top:118px;width:1680px;display:grid;grid-template-columns:repeat(var(--n,5),1fr);gap:10px}
+.track a{display:flex;align-items:center;justify-content:center;height:42px;border-radius:21px;border:1.5px solid var(--line);background:var(--panel);font:500 24px var(--sans);color:var(--faint);text-decoration:none;position:relative}
+.track a.done{border-color:var(--strong);color:var(--muted)}
+.track a.now{background:var(--text);border-color:var(--text);color:var(--bg);font-weight:600}
+.track a.done::after,.track a.now::after{content:"";position:absolute;left:20px;right:20px;bottom:-10px;height:2px;background:var(--strong)}
+.track a:hover{border-color:var(--text)}
+.jr{position:absolute;left:1300px;width:500px}
+.jr.idx{top:214px;font:500 26px var(--mono);color:var(--faint)}
+.jr.ttl{top:262px;font:600 42px/1.1 var(--sans);color:var(--text);letter-spacing:-.5px}
+.jr.here{top:574px}
+.jr.here .l{display:block;font:500 24px var(--sans);color:var(--faint);margin-bottom:8px}
+.jr.here .v{display:inline-block;font:500 26px var(--mono);color:var(--bg);background:var(--text);border-radius:21px;padding:4px 16px}
+.jr.cite{top:700px;width:600px;font:400 21px/1.4 var(--mono);color:var(--faint)}
+.strip{position:absolute;left:120px;top:790px;width:1120px;height:230px;border:1.5px solid var(--line);border-radius:14px;background:var(--panel)}
+
+/* chapter cards */
+.watch{position:absolute;left:166px;top:740px;font:500 30px var(--sans);color:var(--text);text-decoration:none;border-bottom:2px solid var(--strong);padding-bottom:4px}
+.watch:hover{border-color:var(--text)}
+.watch span{color:var(--muted);font-family:var(--mono);font-size:26px}
+.inside{position:absolute;left:166px;top:850px;width:1600px;font:400 26px/1.5 var(--sans);color:var(--faint)}
+
+/* whiteboard */
+.wq{position:absolute;left:120px;top:322px;width:1680px;font:600 64px/1.15 var(--sans);letter-spacing:-1.5px;color:var(--text);margin:0}
+.wa{position:absolute;left:120px;top:478px;width:1500px;font:500 44px/1.3 var(--sans);color:var(--text);margin:0}
+.wa.warn{color:var(--accent)}
+.wc{white-space:pre;position:absolute;left:120px;top:736px;padding-left:26px;border-left:4px solid var(--strong);font:500 28px/40px var(--mono);color:var(--muted)}
+
+/* ---------- Narrow screens: one scrolling column, every slide at its last step ---------- */
+.flow body,.flow{overflow:auto}
+.flow #app{display:block;height:auto}
+.flow #side,.flow #bar,.flow #notes{display:none}
+.flow #main{height:auto;display:block}
+.flow #view{overflow:visible}
+.flow #stage{position:static;transform:none;width:auto;height:auto;background:none;box-shadow:none;padding:16px 14px 60px}
+.flow .sl{display:block;margin:0 0 44px}
+.flow .fscroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.flow .frame{position:relative;width:calc(1920px * var(--fs));height:calc(1080px * var(--fs))}
+.flow .slide{transform:scale(var(--fs));transform-origin:0 0}
+.flow .ftext{display:block;padding:12px 2px 0;font-size:17px;line-height:1.5}
+.flow .ftext h2{font-size:19px;margin:0 0 6px;line-height:1.3}
+.flow .ftext h2 .n{font-family:var(--mono);color:var(--faint);font-weight:500;margin-right:8px}
+.flow .ftext ol{margin:6px 0;padding-left:22px}
+.flow .ftext li{margin:3px 0}
+.flow .ftext .nt{color:var(--muted);margin:8px 0 0}
+.flow .ftext a{color:var(--text)}
+.flow-head{display:none}
+.flow .flow-head{display:block;padding:20px 16px 0}
+.flow .flow-head h1{font-size:26px;margin:0 0 6px}
+.flow .flow-head p{color:var(--muted);margin:0;font-size:16px}
+.noanim *, .noanim *::before{transition:none!important;animation:none!important}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <nav id="side" aria-label="Chapters and slides"><div class="inner"><h2 class="deck-title"></h2><ol id="toc"></ol></div></nav>
+  <div id="main">
+    <div class="flow-head"><h1 class="deck-title"></h1><p>A narrow screen shows every slide in one column. Widen the window for the step-through deck.</p></div>
+    <main id="view" aria-live="off">
+      <div id="stage" role="region" aria-roledescription="slide deck" aria-label="Slides"></div>
+    </main>
+    <aside id="notes" aria-label="Speaker notes"><span class="lab">How I'd say it</span><span id="notes-text"></span></aside>
+    <footer id="bar">
+      <div id="progress"></div>
+      <button id="b-side" aria-pressed="false" aria-controls="side" title="Outline (O)">Outline<kbd>O</kbd></button>
+      <div class="arrows">
+        <button id="b-prev" aria-label="Previous step">&larr;</button>
+        <button id="b-next" aria-label="Next step">&rarr;</button>
+      </div>
+      <div id="where"><span class="c" id="count"></span><span class="t" id="where-title"></span></div>
+      <div id="pips" aria-label="Steps on this slide"></div>
+      <a id="b-watch" class="btn needs-video" target="_blank" rel="noopener" title="Open the video at this moment (W)">Watch this part<kbd>W</kbd></a>
+      <button id="b-notes" aria-pressed="false" aria-controls="notes" title="Speaker notes (N)">Notes<kbd>N</kbd></button>
+      <button id="b-help" title="Keyboard controls (?)">Keys<kbd>?</kbd></button>
+    </footer>
+    <p id="live" class="sr" aria-live="polite"></p>
+  </div>
+</div>
+<dialog id="help" aria-labelledby="help-h">
+  <h2 id="help-h">Controls</h2>
+  <table>
+    <tr><td>&rarr;  Space  Enter  PgDn</td><td>Next step, then the next slide</td></tr>
+    <tr><td>&larr;  Shift+Space  PgUp</td><td>Previous step</td></tr>
+    <tr><td>Shift+&rarr;  Shift+&larr;</td><td>Next or previous slide, skipping steps</td></tr>
+    <tr><td>1 to 9, 0</td><td>Jump to a chapter card, 0 for the title</td></tr>
+    <tr><td>Home  End</td><td>First or last slide</td></tr>
+    <tr><td>O</td><td>Chapter and slide outline</td></tr>
+    <tr><td>N</td><td>Speaker notes</td></tr>
+    <tr class="needs-video"><td>W</td><td>Open the video at this moment</td></tr>
+    <tr><td>Click or tap</td><td>Right two thirds: forward. Left third: back. Swipe works too.</td></tr>
+    <tr><td>Esc</td><td>Close this, or the outline</td></tr>
+  </table>
+  <p>The address bar keeps your place, so a reload or a shared link opens the same slide and step.</p>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+
+<script>
+"use strict";
+/* ======================================================================
+   How a slide works
+
+   A slide is an object passed to add():
+     id       unique; the URL hash is #id or #id/step
+     ch       chapter number, 1-based; 0 for the title
+     title    shown in the bottom bar and the outline
+     html()   returns the slide's markup, drawn on a 1920x1080 canvas
+     caps     one caption per build step; its length is the step count
+     steps    the step count, for a slide without captions
+     code     per step, [panelIndex, firstLine, lastLine] to highlight (0-based)
+     packets  per step, { id, pts, label, red?, ms? } or null: a labelled pill
+              travels the polyline pts when stepping forward
+     carry    per step, the text of the .carry .cv pill (what a hop carries)
+     cap      { x, y, w } to move the caption
+     notes    speaker notes (N): one or two sentences to say at a whiteboard
+     flow     [question, answer, cite]: narrow-screen text for a Q/A slide
+     at,times video seconds for the slide and each step, used only with VIDEO
+
+   Builds are declared on elements, never coded per slide:
+     data-on="spec"           shown only on matching steps
+     data-c="cls@spec ..."    toggles a class on matching steps
+   spec: "2" exactly, "2+" from 2 on, "1-3" a range, "0,2,4+" any of them.
+   Classes worth toggling: node reached/active/cur/warn/dim, edge lit/cur/red,
+   chip lit, tag lit, dimmable dim.
+
+   Every slide renders from its step number alone, so going back, reloading
+   and deep links land on the same state. Keep no state between steps.
+
+   Canvas grid: margins at x=120 and x=1800, the chapter header at y=64, content
+   from y=150, the caption at y=922. Text is at least 24px. A mono character at
+   24px is MONO_CW wide; size boxes from that, never by eye.
+   ====================================================================== */
+const DECK_TITLE = "Subsystem: under the hood";
+const VIDEO = null; // or "file:///abs/path/video.mp4": adds Watch links that open it at each slide's `at`
+const C = { text:"#ededed", bg:"#0b0b0b" };
+
+// [title, subtitle, video seconds]
+const CHAPTERS = [
+  ["Flow diagram", "Who produces what, and what reads it", 0],
+  ["Code panels", "Selectable code, highlighted one step at a time", 0],
+  ["State machine", "One hop per click, with what each hop carries", 0],
+  ["Decision", "Questions in a row, each case taking its own path", 0],
+  ["Lifecycle", "Several units through the same columns of states", 0],
+  ["Journey", "One value through every stage", 0],
+  ["At the whiteboard", "The question first, the answer on the next step", 0],
+];
+
+/* ---------- small helpers ---------- */
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const capHtml = (s) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+const pd = (pts) => pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+const N = (x, y, w, h, title, sub = "", mono = false) => ({ x, y, w, h, title, sub, mono });
+const Lp = (n) => [n.x, n.y + n.h / 2];
+const Rp = (n) => [n.x + n.w, n.y + n.h / 2];
+const Tp = (n) => [n.x + n.w / 2, n.y];
+const Bp = (n) => [n.x + n.w / 2, n.y + n.h];
+const MONO_CW = 14.4; // Geist Mono advance at 24px
+
+// A box with a title and up to three subtitle lines ("\n" separated).
+function node(n, attrs = "", cls = "") {
+  const subs = n.sub ? n.sub.split("\n") : [];
+  const ty = n.y + n.h / 2 + [9, -6, -20, -34][subs.length];
+  return `<g class="node${n.mono ? " mono" : ""} ${cls}" ${attrs}>
+    <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="14"/>
+    <text class="t" x="${n.x + 22}" y="${ty}">${esc(n.title)}</text>
+    ${subs.map((s, i) => `<text class="s" x="${n.x + 22}" y="${ty + 30 + i * 28}">${esc(s)}</text>`).join("")}
+  </g>`;
+}
+
+// A polyline with an arrowhead; add class lit to draw it, dashed for a later or optional hop.
+function arrow(pts, attrs = "", cls = "") {
+  const a = pts[pts.length - 2], b = pts[pts.length - 1];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const dx = (b[0] - a[0]) / len, dy = (b[1] - a[1]) / len;
+  const hx = b[0] - dx * 12, hy = b[1] - dy * 12;
+  const head = `M${b[0]} ${b[1]} L${hx - dy * 7} ${hy + dx * 7} L${hx + dy * 7} ${hy - dx * 7} Z`;
+  const body = pd(pts.slice(0, -1).concat([[b[0] - dx * 9, b[1] - dy * 9]]));
+  const norm = cls.includes("dashed") ? "" : 'pathLength="1"';
+  return `<g class="edge ${cls}" ${attrs}><path class="e-base" d="${body}"/><path class="e-hl" ${norm} d="${body}"/><path class="e-head" d="${head}"/></g>`;
+}
+
+const packet = (id, cls = "") => `<g class="packet ${cls}" data-packet="${id}"><rect x="-40" y="-21" width="80" height="42" rx="21"/><text x="0" y="8" text-anchor="middle"></text></g>`;
+
+function chip(x, y, w, text, attrs = "", cls = "", h = 52) {
+  return `<g class="chip ${cls}" ${attrs}><rect class="b" x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/><text x="${x + 20}" y="${y + h / 2 + 8}">${esc(text)}</text></g>`;
+}
+
+// A dashed accent outline inside a node, with a short label at its top right.
+const ring = (n, label, attrs = "") => `<g ${attrs}>
+  <rect x="${n.x + 1}" y="${n.y + 1}" width="${n.w - 2}" height="${n.h - 2}" rx="13" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="${n.x + n.w - 24}" y="${n.y + 44}" text-anchor="end" style="font-size:24px;font-weight:600;fill:var(--accent)">${esc(label)}</text></g>`;
+
+const svg = (inner, label = "") => `<svg class="layer" viewBox="0 0 1920 1080" ${label ? `role="img" aria-label="${esc(label)}"` : `aria-hidden="true"`}>${inner}</svg>`;
+const t = (x, y, s, cls = "lbl", attrs = "") => `<text class="${cls}" x="${x}" y="${y}" ${attrs}>${esc(s)}</text>`;
+
+/* ---------- syntax tint, monochrome ---------- */
+const KW = new Set("export const let function async await return if else for of in new try catch throw type typeof readonly extends true false null undefined this break continue".split(" "));
+function tint(line) {
+  if (!line.trim()) return " ";
+  const trimmed = line.trimStart();
+  if (/^(\/\/|\/\*|\* |\*\/)/.test(trimmed)) return `<span class="com">${esc(line)}</span>`;
+  const re = /(\/\/.*$)|(\/\*.*?(?:\*\/|$))|("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|'(?:[^'\\]|\\.)*')|(\b\d[\d_,.]*\b)|([A-Za-z_$][\w$]*)|(\s+)|([^\sA-Za-z_$\d"'`]+?)/g;
+  let out = "", m;
+  while ((m = re.exec(line))) {
+    const [all, c1, c2, str, num, id, ws, pun] = m;
+    if (c1 || c2) out += `<span class="com">${esc(all)}</span>`;
+    else if (str) out += `<span class="str">${esc(str)}</span>`;
+    else if (num) out += `<span class="num">${esc(num)}</span>`;
+    else if (id) out += KW.has(id) ? `<span class="k">${id}</span>` : /^[A-Z]/.test(id) ? `<span class="ty">${esc(id)}</span>` : esc(id);
+    else if (ws) out += ws;
+    else out += `<span class="pun">${esc(pun)}</span>`;
+  }
+  return out;
+}
+
+// A code panel. Height follows the line count; `pad` keeps panels on sibling slides the same height.
+function panel(p) {
+  const lines = p.lines.slice();
+  while (p.pad && lines.length < p.pad) lines.push("");
+  const h = 60 + lines.length * 36 + 20;
+  return `<div class="code" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${h}px">
+    <div class="file">${esc(p.file)}</div><div class="band"></div>
+    <div class="lines">${lines.map((l) => `<div class="ln">${tint(l)}</div>`).join("")}</div></div>`;
+}
+
+const hdr = (ch) => `<div class="hdr"><span class="hn">${String(ch).padStart(2, "0")}</span><span class="ht">${esc(CHAPTERS[ch - 1][0])}</span></div>
+  <div class="rail" style="width:${Math.min(55 * CHAPTERS.length + 8 * (CHAPTERS.length - 1), 560)}px">${CHAPTERS.map((_, i) => `<i class="${i + 1 < ch ? "p" : i + 1 === ch ? "c" : ""}"></i>`).join("")}</div>`;
+
+/* ======================================================================
+   Slides. All examples are fictional: replace them with verified target code.
+   Labels in the examples say what kind of thing goes where.
+   ====================================================================== */
+const S = [];
+const add = (s) => S.push(s);
+
+/* ---------- Title ---------- */
+add({
+  id: "title", ch: 0, title: DECK_TITLE, at: 0,
+  notes: "What this system does and why it exists, in one sentence. Then the chapters, in order.",
+  html: () => svg(`
+    <text x="160" y="430" style="font-size:132px;font-weight:600;letter-spacing:-4px;fill:var(--text)">Subsystem name</text>
+    <text x="164" y="520" style="font-size:46px;font-weight:400;fill:var(--muted)">Under the hood: the shapes, the calls, and the state machine</text>
+    <rect x="164" y="590" width="1300" height="2" fill="#4a4a4a"/>
+    <text x="164" y="680" style="font-size:38px;font-weight:500;fill:var(--text)">Illustrative examples. Replace with code from your target.</text>
+    <text x="164" y="740" class="m" style="font-size:24px;fill:var(--faint)">Template gallery: flow, types, states, decisions, and data transformations</text>
+    <text x="164" y="960" style="font-size:26px;font-weight:500;fill:var(--faint)">Right arrow or Space to step through.  O for the outline.  N for notes.  ? for every key.</text>`, DECK_TITLE),
+});
+
+/* ---------- Chapter cards: one per chapter, reachable with keys 1 to 9 ---------- */
+function card(n, inside) {
+  const [title, sub, at] = CHAPTERS[n - 1];
+  const mm = `${Math.floor(at / 60)}:${String(Math.floor(at % 60)).padStart(2, "0")}`;
+  add({
+    id: `ch${n}`, ch: n, card: true, title: `${String(n).padStart(2, "0")} ${title}`, at,
+    notes: inside.notes,
+    html: () => svg(`
+      <text x="160" y="470" class="m" style="font-size:180px;font-weight:500;fill:#4a4a4a">${String(n).padStart(2, "0")}</text>
+      <text x="164" y="600" style="font-size:96px;font-weight:600;letter-spacing:-2.5px;fill:var(--text)">${esc(title)}</text>
+      <text x="166" y="676" style="font-size:42px;font-weight:400;fill:var(--muted)">${esc(sub)}</text>`, `Chapter ${n}: ${title}`)
+      + (VIDEO ? `<a class="watch" href="${VIDEO}#t=${at.toFixed(1)}" target="_blank" rel="noopener">Watch this chapter in the video <span>from ${mm}</span></a>` : "")
+      + `<p class="inside">In this chapter: ${esc(inside.list)}</p>`,
+  });
+}
+
+/* ---------- 1. Flow diagram: existing producers, what they store, what the change reads ---------- */
+card(1, { list: "producers, what they store, and what the change reads", notes: "Start with what already exists and what the change reuses, before anything new." });
+
+{
+  const PRODUCERS = [
+    N(120, 200, 520, 104, "Producer A", "what it computes"),
+    N(120, 340, 520, 104, "Producer B", "what it computes"),
+    N(120, 480, 520, 104, "Producer C", "what it computes"),
+  ];
+  const STORED = ["output_a", "output_b", "output_b, output_c"];
+  const READER = N(1300, 340, 500, 104, "readInput(data)", "one input object", true);
+  const ADDS = [N(1300, 580, 500, 96, "New step one", "a local transformation"), N(1300, 696, 500, 96, "New step two", "an external request")];
+  add({
+    id: "flow", ch: 1, title: "Produced once, reused later",
+    caps: [
+      "The existing system computes each output once and stores it.",
+      "The change reads those stored outputs through one function. Nothing is computed twice.",
+      "It never calls Producer B again. Say what is reused and what is called, precisely.",
+      "What it adds is its own work: name each piece and what it costs.",
+    ],
+    notes: "Each producer runs once and stores its output. The change reads the stored outputs through one function and never calls the producers again; what it adds is two small steps of its own.",
+    html: () => hdr(1) + svg(`
+      ${t(120, 180, "Existing system")}
+      ${t(730, 180, "Stored outputs")}
+      ${t(1300, 320, "The change", "lbl", 'data-on="1+"')}
+      ${t(1300, 560, "What it adds", "lbl", 'data-on="3+"')}
+      ${PRODUCERS.map((n, i) => {
+        const cy = n.y + n.h / 2;
+        return arrow([Rp(n), [730, cy]], "", "muted lit") + chip(730, cy - 32, 490, STORED[i], "", "m strong", 64);
+      }).join("")}
+      ${PRODUCERS.map((n, k) => {
+        const cy = n.y + n.h / 2, ty = READER.y + 30 + k * 22;
+        return arrow([[1220, cy], [1260, cy], [1260, ty], [1300, ty]], 'data-on="1+" data-c="lit@1+"');
+      }).join("")}
+      ${PRODUCERS.map((n) => node(n)).join("")}
+      ${ring(PRODUCERS[1], "never called again", 'data-on="2+"')}
+      ${node(READER, 'data-on="1+"', "strong")}
+      ${ADDS.map((n) => node(n, 'data-on="3+"', "muted")).join("")}
+    `, "Producers store their output; the change reads it through one function"),
+  });
+}
+
+/* ---------- 2. Code panels: one panel with lit chips, then two panels side by side ---------- */
+card(2, { list: "an entry point line by line; the core types", notes: "Illustrative code. One idea per highlighted band." });
+
+add({
+  id: "code", ch: 2, title: "handle(): parse, enqueue, reply",
+  code: [[0, 0, 0], [0, 1, 2], [0, 3, 3], [0, 5, 6], [0, 7, 7]],
+  caps: [
+    "An illustrative entry point. Replace it with your target's actual code.",
+    "Parse external input, then reject an invalid request.",
+    "The parsed value becomes a task.",
+    "Enqueue the task and build a receipt from its identifier.",
+    "Return the receipt. The worker handles execution separately.",
+  ],
+  notes: "Follow the input through parsing, scheduling, and the reply. Cite the real entry point when adapting this example.",
+  html: () => hdr(2) + panel({ x: 120, y: 170, w: 1100, file: "example/handler.ts", lines: [
+    "export async function handle(raw: unknown) {",
+    "  const parsed = parseTask(raw);",
+    "  if (!parsed.ok) return invalid(parsed.error);",
+    "  const task = parsed.value;",
+    "",
+    "  const id = await queue.enqueue(task);",
+    "  const receipt = { id, state: \"queued\" };",
+    "  return accepted(receipt);",
+    "}",
+  ] }) + svg(`${t(1270, 190, "What each step does")}
+    ${["external input", "parse and validate", "task value", "queue and receipt", "reply"].map((name, i) => chip(1270, 210 + i * 70, 530, name, `data-c="lit@${i}"`, "m")).join("")}`, "An illustrative task submission handler"),
+});
+
+add({
+  id: "shapes", ch: 2, title: "Task input and result",
+  code: [[0, 0, 4], [0, 6, 8], [1, 0, 4], [1, 6, 10]],
+  caps: [
+    "The task holds its identity, payload, and attempt number.",
+    "A union distinguishes parsed data from raw bytes.",
+    "Completion, retry, and failure each carry different data.",
+    "A failure records its code, message, and retry policy.",
+  ],
+  notes: "Show which data belongs to each state. These fictional types demonstrate the layout; use the target's own types.",
+  html: () => hdr(2) + panel({ x: 120, y: 170, w: 830, file: "example/types.ts", lines: [
+    "type TaskInput = {",
+    "  id: string;",
+    "  payload: Uint8Array;",
+    "  attempt: number;",
+    "};",
+    "",
+    "type Payload =",
+    "  | { parsed: true; value: Data }",
+    "  | { parsed: false; raw: Uint8Array };",
+  ] }) + panel({ x: 970, y: 170, w: 830, file: "example/types.ts", lines: [
+    "type TaskResult =",
+    "  | { state: \"completed\"; value: Output }",
+    "  | { state: \"retry\"; delayMs: number }",
+    "  | { state: \"failed\";",
+    "      error: Failure };",
+    "",
+    "type Failure = {",
+    "  code: string;",
+    "  message: string;",
+    "  retryable: boolean;",
+    "};",
+  ] }),
+});
+
+/* ---------- 3. State machine: a grid of steps, one hop per click, with a packet and a carry pill ---------- */
+card(3, { list: "the run end to end, one hop at a time", notes: "The whole run as a state machine. One hop per click; the pill says what each hop carries." });
+
+{
+  const COLS = [120, 550, 980, 1410], ROWS = [170, 365, 600];
+  const rn = (c, r, title, sub, mono) => N(COLS[c], ROWS[r], 390, 100, title, sub, mono);
+  const RUN = [
+    rn(0, 0, "Caller", "submits a task"),
+    rn(1, 0, "handle()", "parse and validate", true),
+    rn(2, 0, "Queue", "holds pending tasks"),
+    rn(3, 0, "Worker", "takes the next task"),
+    rn(0, 1, "Load", "retrieve task input"),
+    rn(1, 1, "transform()", "prepare the input", true),
+    rn(2, 1, "execute()", "produce the output", true),
+    rn(3, 1, "store()", "persist the result", true),
+    rn(0, 2, "Read request", "look up task status"),
+    rn(1, 2, "Consumer", "uses the output"),
+  ];
+  // [what the hop carries, the caption]
+  const HOPS = [
+    ["", "The caller submits a task. This example starts here."],
+    ["input", "The handler parses external input into a task."],
+    ["Task", "The queue stores the task until a worker can take it."],
+    ["Task", "The worker claims a pending task."],
+    ["id", "Load the input. A missing task produces an explicit error."],
+    ["Input", "Transform the input into the shape execution expects."],
+    ["Prepared", "Execute the task and produce its output."],
+    ["Output", "Store the result according to the target system's persistence policy."],
+    ["id", "Later, a consumer requests the task's status."],
+    ["Result", "The consumer receives the output and current state."],
+  ];
+  const LATER = 8; // drawn dashed: not part of the same run
+  const link = (a, b, mid) => Math.abs(a.y - b.y) < 1
+    ? (b.x > a.x ? [Rp(a), Lp(b)] : [Lp(a), Rp(b)])
+    : [Bp(a), [Bp(a)[0], mid], [Tp(b)[0], mid], Tp(b)];
+  const hopPath = (k) => { const b = RUN[k]; return link(RUN[k - 1], b, b.y - 35); };
+  add({
+    id: "run", ch: 3, title: "From submission to consumption",
+    caps: HOPS.map((h) => h[1]),
+    notes: "Walk the task through submission, execution, persistence, and consumption. Replace these stages with the actual system's boundaries.",
+    packets: HOPS.map((h, k) => (k ? { id: "run", pts: hopPath(k), label: h[0] } : null)),
+    carry: HOPS.map((h, k) => (k ? h[0] : "nothing yet")),
+    html: () => hdr(3) + svg(`
+      ${RUN.slice(1).map((_, i) => arrow(hopPath(i + 1), `data-c="lit@${i + 1}+ cur@${i + 1}"`, i + 1 === LATER ? "dashed" : "")).join("")}
+      <text x="720" y="553" style="font-size:24px;font-weight:500;fill:var(--faint)">later, when a consumer requests it</text>
+      <g data-on="4+">
+        <line x1="315" y1="465" x2="315" y2="478" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5"/>
+        <rect x="120" y="478" width="560" height="46" rx="10" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <text x="140" y="509" style="font-size:24px;font-weight:500;fill:var(--muted)">error: missing input</text>
+      </g>
+      ${RUN.map((n, k) => node(n, `data-c="reached@${k}+ active@${k}"`)).join("")}
+      ${packet("run")}
+      <text x="980" y="636" style="font-size:24px;font-weight:500;fill:var(--faint)">on this hop</text>`, "The run as a state machine")
+      + `<div class="carry" style="position:absolute;left:980px;top:652px;width:820px"><span class="cv"></span></div>`,
+  });
+}
+
+/* ---------- 4. Decision: a spine of questions, leaves below, one case per step ---------- */
+card(4, { list: "how a request reaches a scheduling decision", notes: "Each step sends one illustrative request down the questions to its destination." });
+
+{
+  const sp = (i, title, sub) => N(120 + i * 440, 230, 340, 120, title, sub);
+  const SPINE = [
+    sp(0, "Invalid input?", "does parsing reject\nthe request?"),
+    sp(1, "Allowed?", "may this caller\nsubmit the task?"),
+    sp(2, "Capacity?", "can this system\naccept more work?"),
+    sp(3, "Cached?", "is a reusable result\nalready available?"),
+  ];
+  const lf = (i, y, title, sub) => N(120 + i * 440, y, 340, 110, title, sub, true);
+  const LEAVES = [
+    lf(0, 470, "invalid", "parse_error"),
+    lf(1, 470, "rejected", "permission_denied"),
+    lf(2, 470, "deferred", "capacity_limit"),
+    lf(3, 470, "completed", "cache_hit"),
+    lf(3, 610, "queued", "cache_miss"),
+  ];
+  const WARN = [0, 1]; // rejected requests, outlined in the accent color
+  // [packet label, questions visited, destination]: illustrative cases
+  const CASES = [["case one", 1, 0], ["case two", 4, 3], ["case three", 4, 4]];
+  const casePath = (through, leaf) => {
+    const y = SPINE[0].y + SPINE[0].h / 2;
+    const pts = [[SPINE[0].x + 60, 168], [SPINE[0].x + 60, y]];
+    for (const n of SPINE.slice(1, through)) pts.push([n.x + 60, y]);
+    const l = LEAVES[leaf], last = [l.x + 60, y];
+    if (Math.abs(pts[pts.length - 1][0] - last[0]) > 1) pts.push(last);
+    pts.push([l.x + 60, l.y + 30]);
+    return pts;
+  };
+  const visits = (i) => CASES.map((c, k) => (i < c[1] ? k : -1)).filter((k) => k >= 0).join(",");
+  const lands = (l) => CASES.map((c, k) => (c[2] === l ? k : -1)).filter((k) => k >= 0).join(",");
+  const last = SPINE[3], SUMMARY = CASES.length;
+  add({
+    id: "decision", ch: 4, title: "The scheduling decision",
+    caps: [
+      "Case one stops at the first question because parsing failed.",
+      "Case two is allowed, capacity is available, and a cached result exists.",
+      "Case three has no cached result, so the task enters the queue.",
+      "Each decision has an explicit outcome and reason.",
+    ],
+    cap: { y: 950 },
+    notes: "Walk each test case down the questions. Name the guard on each edge and the line that applies it.",
+    packets: CASES.map(([label, through, leaf]) => ({ id: "verdict", pts: casePath(through, leaf), label, ms: 700 + through * 450 })).concat([null]),
+    html: () => hdr(4) + svg(`
+      <circle cx="180" cy="168" r="7" fill="${C.text}"/>
+      <text x="200" y="176" style="font-size:26px;font-weight:500;fill:var(--muted)">a case arrives</text>
+      ${[0, 1, 2].map((i) => arrow([Rp(SPINE[i]), Lp(SPINE[i + 1])]) + `<text class="elabel" x="${SPINE[i].x + 390}" y="278" text-anchor="middle">${i === 0 ? "no" : "yes"}</text>`).join("")}
+      ${[[0, 0, "yes"], [1, 1, "no"], [2, 2, "no"], [3, 3, "yes"]].map(([s, l, lab]) => {
+        const a = SPINE[s], b = LEAVES[l], x = b.x + 170;
+        return arrow([[x, a.y + a.h], [x, b.y]]) + `<text class="elabel" x="${x + 10}" y="${a.y + a.h + 34}">${lab}</text>`;
+      }).join("")}
+      ${arrow([[last.x + last.w, last.y + last.h - 24], [1840, last.y + last.h - 24], [1840, LEAVES[4].y + 55], [last.x + last.w, LEAVES[4].y + 55]])}
+      <text class="elabel" x="1828" y="${last.y + last.h + 34}" text-anchor="end">no</text>
+      ${SPINE.map((n, i) => node(n, `data-c="reached@${visits(i) || "x"}" style="--d:${(0.2 + i * 0.45).toFixed(2)}s"`, "visit")).join("")}
+      ${LEAVES.map((n, l) => node(n, `data-c="active@${lands(l) || "x"} ${WARN.includes(l) ? "" : `dim@${SUMMARY}`}"`, WARN.includes(l) ? "warn" : "")).join("")}
+      ${packet("verdict")}`, "A scheduling decision flow")
+      + panel({ x: 120, y: 640, w: 1000, file: "example/scheduler.ts", lines: [
+        "export type Decision =",
+        "  | \"invalid\" | \"rejected\" | \"deferred\"",
+        "  | \"completed\" | \"queued\";",
+        "",
+        "// each branch returns a decision and reason",
+      ] }),
+  });
+}
+
+/* ---------- 5. Lifecycle: columns of states, each unit leaving a trail ---------- */
+card(5, { list: "a unit's life, from created to its final outcome", notes: "Follow several units through the same states. The failure gets the accent." });
+
+{
+  const COLS = [["Admission", ["queued", "rejected"]], ["Execution", ["running", "waiting", "cancelled"]], ["Result", ["completed", "failed", "cancelled", "retrying"]], ["Next action", ["return", "report", "stop", "enqueue"]]];
+  const xy = (c, r) => [120 + c * 440, 250 + r * 74];
+  const W = 340, H = 56;
+  // [label, the row it takes in each column]
+  const UNITS = [["a successful task", [0, 0, 0, 0]], ["a failed task", [0, 0, 1, 1]], ["a rejected task", [1, 2, 2, 2]], ["a task to retry", [0, 1, 3, 3]]];
+  const RED = 1;
+  const unitPath = (rows) => {
+    const pts = [];
+    rows.forEach((r, c) => { const [x, y] = xy(c, r); if (c > 0) pts.push([x, y + H / 2]); pts.push([x + W, y + H / 2]); });
+    pts.pop();
+    const [x, y] = xy(rows.length - 1, rows[rows.length - 1]);
+    pts.push([x + 24, y + H / 2]);
+    return pts;
+  };
+  const links = (rows) => rows.slice(1).map((_, c) => {
+    const [x0, y0] = xy(c, rows[c]), [x1, y1] = xy(c + 1, rows[c + 1]);
+    const a = [x0 + W, y0 + H / 2], b = [x1, y1 + H / 2], m = (a[0] + b[0]) / 2;
+    return [a, [m, a[1]], [m, b[1]], b];
+  });
+  add({
+    id: "lifecycle", ch: 5, title: "A unit's life",
+    caps: [
+      "The worker completes a task and returns its output.",
+      "A failed task produces an error report.",
+      "A rejected task stops without execution.",
+      "A waiting task reaches an explicit retry state and returns to the queue.",
+      "Every accepted task reaches a terminal state or an explicit retry.",
+    ],
+    notes: "Follow success, failure, rejection, and retry separately. Each path makes the next action explicit.",
+    packets: UNITS.map(([label, rows], u) => ({ id: "unit", pts: unitPath(rows), label, red: u === RED, ms: 1800 })).concat([null]),
+    html: () => {
+      const [ex, ey] = xy(2, 3), [px, py] = xy(3, 3);
+      return hdr(5) + svg(`
+        ${UNITS.map(([, rows], u) => links(rows).map((pts) => arrow(pts, `data-on="${u}+" data-c="lit@${u}+ cur@${u}"`, `trail ${u === RED ? "red" : ""}`)).join("")).join("")}
+        ${COLS.map(([head, states], c) => `<text x="${xy(c, 0)[0]}" y="222" style="font-size:26px;font-weight:600;fill:var(--muted)">${esc(head)}</text>` +
+          states.map((s, r) => {
+            const on = UNITS.map((u, k) => (u[1][c] === r ? k : -1)).filter((k) => k >= 0).join(",");
+            const [x, y] = xy(c, r);
+            return node(N(x, y, W, H, s, "", true), on ? `data-c="active@${on}"` : "");
+          }).join("")).join("")}
+        <g data-on="3"><rect x="${ex - 6}" y="${ey - 6}" width="${W + 12}" height="${H + 12}" rx="16" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+          <rect x="${px - 6}" y="${py - 6}" width="${W + 12}" height="${H + 12}" rx="16" fill="none" stroke="var(--accent)" stroke-width="2.5"/></g>
+        <g data-on="4"><text x="120" y="720" class="m" style="font-size:30px;font-weight:500;fill:var(--text)">terminal state or explicit retry</text>
+          <text x="120" y="762" class="m" style="font-size:24px;fill:var(--faint)">example/types.ts:60</text></g>
+        ${packet("unit")}`, "A unit's life across four stages");
+    },
+  });
+}
+
+/* ---------- 6. Journey: one value through every stage, one slide per stage ---------- */
+card(6, { list: "one label from input to the final consumer", notes: "One fictional label, through parsing, transformation, storage, and output." });
+
+{
+  // Each stage: a track label, a title, a cite, the value as this stage holds it, the panel, and two steps.
+  const STAGES = [
+    { label: "received", title: "The input value", cite: "example/input.ts", here: '\"  Example Task  \"',
+      file: "request.body", lines: ["{", "  id: \"task-1\",", "  label: \"  Example Task  \"", "}"],
+      steps: [[1, 1, "The identifier travels with the value."], [2, 2, "The label arrives with leading and trailing spaces."]],
+      notes: "Start with a fictional input. Replace it with a representative fixture from the target." },
+    { label: "trimmed", title: "Trim the label", cite: "example/normalize.ts", here: '\"Example Task\"',
+      file: "normalize(input)", lines: ["const trimmed = input.label.trim();", "", "// \"  Example Task  \"", "// becomes \"Example Task\""],
+      steps: [[0, 0, "Trimming changes only the surrounding spaces."], [2, 3, "Show the value before and after the transformation."]],
+      notes: "Name the transformation and which parts of the value it preserves." },
+    { label: "keyed", title: "Build a lookup key", cite: "example/key.ts", here: '\"example-task\"',
+      file: "makeKey(trimmed)", lines: ["const key = trimmed", "  .toLowerCase()", "  .replaceAll(\" \", \"-\");", "", "// \"Example Task\" -> \"example-task\""],
+      steps: [[0, 2, "Lowercase the label and replace spaces with hyphens."], [4, 4, "The key becomes the value used for later lookups."]],
+      notes: "Explain why the next consumer needs this representation." },
+    { label: "stored", title: "Store the mapping", cite: "example/store.ts", here: "task-1 -> example-task",
+      file: "store.set(id, key)", lines: ["await store.set(input.id, {", "  key,", "});"],
+      steps: [[0, 0, "Use the original identifier to store the mapping."], [1, 1, "Keep the derived key as the stored value."]],
+      notes: "Show the storage boundary without prescribing a database or write policy." },
+    { label: "returned", title: "Read the key", cite: "example/read.ts", here: '\"example-task\"',
+      file: "read(input.id)", lines: ["const saved = await store.get(input.id);", "return {", "  id: input.id,", "  key: saved.key,", "};"],
+      steps: [[0, 0, "Read the stored mapping with the original identifier."], [2, 3, "Return the identifier and transformed key to the consumer."]],
+      notes: "Show the value as the final consumer receives it." },
+  ];
+  const ROWS = [["Input", '"  Example Task  "'], ["Trimmed", '"Example Task"'], ["Key", '"example-task"']];
+  const rowY = (i) => 790 + 112 + i * 40;
+
+  // A mark introduced at stage `at`, step `st`: shown on every later stage, and from that step on its own.
+  const since = (n, at, st) => (n > at ? 'data-on="0+"' : n === at ? `data-on="${st}+"` : null);
+  STAGES.forEach((g, n) => {
+    const mark = (at, st, body) => { const a = since(n, at, st); return a ? `<g ${a}>${body}</g>` : ""; };
+    add({
+      id: `j${n + 1}`, ch: 6, title: `${n + 1}. ${g.title} (${g.label})`,
+      code: g.steps.map(([a, b]) => [0, a, b]),
+      caps: g.steps.map((s) => s[2]),
+      cap: { x: 1300, y: 330, w: 500 },
+      notes: g.notes,
+      html: () => hdr(6)
+        + `<nav class="track" style="--n:${STAGES.length}" aria-label="Journey stages">${STAGES.map((s, i) => `<a href="#j${i + 1}" class="${i < n ? "done" : i === n ? "now" : ""}" ${i === n ? 'aria-current="step"' : ""}>${esc(s.label)}</a>`).join("")}</nav>`
+        + panel({ x: 120, y: 200, w: 1120, file: g.file, lines: g.lines, pad: 13 })
+        + `<div class="jr idx">${String(n + 1).padStart(2, "0")} / ${String(STAGES.length).padStart(2, "0")}</div><div class="jr ttl">${esc(g.title)}</div>`
+        + `<div class="jr here"><span class="l">the value, as this stage holds it</span><span class="v">${esc(g.here)}</span></div>`
+        + `<div class="jr cite">${esc(g.cite)}</div>`
+        + `<div class="strip"></div>`
+        + svg(`
+          <text x="148" y="828" style="font-size:24px;font-weight:500;fill:var(--faint)">The example value at each stage</text>
+          <g style="font-size:24px;font-weight:500;fill:var(--faint)"><text x="148" y="866">Stage</text><text x="600" y="866" text-anchor="end">Value</text></g>
+          ${ROWS.map(([name, amt], i) => `<g class="m" style="font-size:24px;font-weight:500;fill:var(--text)">
+            <text x="148" y="${rowY(i)}">${name}</text><text x="600" y="${rowY(i)}" text-anchor="end">${amt}</text></g>`).join("")}
+          ${mark(0, 0, `<rect x="${600 - 230 - 8}" y="${rowY(2) - 27}" width="${230 + 16}" height="36" rx="6" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`)}
+          ${mark(2, 1, `<text x="700" y="${rowY(2)}" class="m" style="font-size:26px;font-weight:500;fill:var(--accent)">key created</text>`)}
+          ${mark(4, 1, `<text x="700" y="${rowY(0)}" class="m" style="font-size:26px;font-weight:500;fill:var(--muted)">returned to consumer</text>`)}`, "The transformed label"),
+    });
+  });
+}
+
+/* ---------- 7. At the whiteboard: question, then answer and cite on the next step ---------- */
+card(7, { list: "short answers; say yours, then step to check it", notes: "Try each answer out loud before revealing it." });
+
+{
+  // [question, one-sentence answer, file:line that backs it]. The last one is a known problem, in the accent.
+  const QA = [
+    ["Why X instead of Y?", "The constraint that decided it, in one sentence.", "example/file.ts:42"],
+    ["What can a malicious actor do?", "The strongest attack, and what stops it or doesn't.", "example/guard.ts:17   example/route.ts:30"],
+    ["Where does it fail?", "The input or state it handles wrong, and what a user would see.", "example/core.ts:210"],
+  ];
+  QA.forEach(([q, a, cite], i) => {
+    add({
+      id: `wb${i + 1}`, ch: 7, title: q, steps: 2,
+      notes: a,
+      flow: [q, a, cite],
+      html: () => hdr(7) + svg(`${QA.map((_, d) => `<circle class="wbdot ${d < i ? "done" : d === i ? "cur" : ""}" cx="${130 + d * 30}" cy="190" r="8"/>`).join("")}`)
+        + `<p class="wq">${esc(q)}</p>`
+        + `<p class="hint" data-on="0" style="left:120px;top:500px">Say your answer, then step forward to check it.</p>`
+        + `<p class="wa ${i === QA.length - 1 ? "warn" : ""}" data-on="1">${esc(a)}</p>`
+        + `<div class="wc" data-on="1">${esc(cite)}</div>`,
+    });
+  });
+}
+
+/* ======================================================================
+   Engine. No changes needed for new slides.
+   ====================================================================== */
+const root = document.documentElement;
+const standalone = window.self === window.top;
+if (standalone) root.classList.add("standalone");
+if (!VIDEO) root.classList.add("no-video");
+document.querySelectorAll(".deck-title").forEach((e) => { e.textContent = DECK_TITLE; });
+const NOTES_KEY = `deck-notes:${DECK_TITLE}`;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+const narrow = matchMedia("(max-width: 820px), (max-height: 480px)");
+const stage = document.getElementById("stage");
+const view = document.getElementById("view");
+const $ = (id) => document.getElementById(id);
+
+S.forEach((s, i) => {
+  s.i = i;
+  s.n = s.steps || (s.caps ? s.caps.length : 1);
+  const art = document.createElement("article");
+  art.className = "sl";
+  art.id = `s-${s.id}`;
+  art.setAttribute("aria-label", s.title);
+  const cap = s.caps ? `<p class="cap" style="${s.cap ? `${s.cap.x ? `left:${s.cap.x}px;` : ""}${s.cap.y ? `top:${s.cap.y}px;` : ""}${s.cap.w ? `width:${s.cap.w}px;` : ""}` : ""}"></p>` : "";
+  const ch = s.ch ? `<span class="n">${String(s.ch).padStart(2, "0")}</span>` : "";
+  const flowBody = s.flow
+    ? `<p><strong>${esc(s.flow[0])}</strong> ${esc(s.flow[1])} <code>${esc(s.flow[2])}</code></p>`
+    : s.caps ? `<ol>${s.caps.map((c) => `<li>${capHtml(c)}</li>`).join("")}</ol>` : "";
+  art.innerHTML = `<div class="fscroll"><div class="frame"><section class="slide">${s.html()}${cap}</section></div></div>
+    <div class="ftext"><h2>${ch}${esc(s.title)}</h2>${flowBody}<p class="nt">${esc(s.notes || "")}</p></div>`;
+  stage.appendChild(art);
+  s.el = art;
+  s.k = -1;
+});
+
+/* step spec: "2", "2+", "1-3", "0,2,4+" */
+function match(spec, k) {
+  if (k < 0) return false;
+  return spec.split(",").some((p) => {
+    p = p.trim();
+    if (!p) return false;
+    if (p.endsWith("+")) return k >= +p.slice(0, -1);
+    if (p.includes("-")) { const [a, b] = p.split("-").map(Number); return k >= a && k <= b; }
+    return k === +p;
+  });
+}
+
+function applyStep(s, k, dir) {
+  const el = s.el;
+  el.querySelectorAll("[data-on]").forEach((e) => e.classList.toggle("off", !match(e.dataset.on, k)));
+  el.querySelectorAll("[data-c]").forEach((e) => {
+    for (const tok of e.dataset.c.trim().split(/\s+/)) {
+      const [c, spec] = tok.split("@");
+      e.classList.toggle(c, match(spec, k));
+    }
+  });
+  const panels = [...el.querySelectorAll(".code")];
+  const step = s.code && k >= 0 ? s.code[k] : null;
+  panels.forEach((p, pi) => {
+    p.classList.toggle("has-step", !!step);
+    const lines = p.querySelectorAll(".ln");
+    lines.forEach((ln, i) => ln.classList.toggle("hl", !!step && step[0] === pi && i >= step[1] && i <= step[2]));
+    const band = p.querySelector(".band");
+    if (step && step[0] === pi) {
+      const top = 62 + step[1] * 36 - 2, h = (step[2] - step[1] + 1) * 36 + 4;
+      if (!band.classList.contains("on")) { band.style.transition = "none"; band.style.top = `${top}px`; band.style.height = `${h}px`; void band.offsetWidth; band.style.transition = ""; }
+      band.style.top = `${top}px`; band.style.height = `${h}px`;
+      band.classList.add("on");
+    } else band.classList.remove("on");
+  });
+  const cap = el.querySelector(".cap");
+  if (cap) {
+    cap.innerHTML = k >= 0 && s.caps[k] ? capHtml(s.caps[k]) : "";
+    cap.classList.remove("in"); void cap.offsetWidth; if (k >= 0) cap.classList.add("in");
+  }
+  const carry = el.querySelector(".carry .cv");
+  if (carry) carry.textContent = k >= 0 ? s.carry[k] : "";
+  el.querySelectorAll(".packet").forEach((g) => { g.getAnimations().forEach((a) => a.cancel()); g.style.opacity = 0; });
+  const pk = s.packets && k >= 0 ? s.packets[k] : null;
+  if (pk && dir > 0 && !reduce.matches && !root.classList.contains("flow")) travel(el.querySelector(`[data-packet="${pk.id}"]`), pk);
+  s.k = k;
+}
+
+function polyLen(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return L; }
+function travel(g, pk) {
+  if (!g) return;
+  const label = pk.label;
+  const w = label.length * MONO_CW + 32;
+  g.querySelector("text").textContent = label;
+  const r = g.querySelector("rect"); r.setAttribute("x", -w / 2); r.setAttribute("width", w);
+  g.classList.toggle("red", !!pk.red);
+  const pts = pk.pts, L = polyLen(pts) || 1;
+  let acc = 0;
+  const kf = pts.map((p, i) => { if (i) acc += Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]); return { transform: `translate(${p[0]}px, ${p[1]}px)`, offset: acc / L }; });
+  const ms = pk.ms || 1000;
+  g.style.opacity = "";
+  g.animate(kf, { duration: ms, easing: "cubic-bezier(.45,0,.55,1)", fill: "forwards", delay: 120 });
+  g.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.86 }, { opacity: 0 }], { duration: ms, fill: "forwards", delay: 120 });
+}
+
+/* ---------- navigation ---------- */
+let cur = -1;
+
+function go(i, k, dir = 0) {
+  i = Math.max(0, Math.min(S.length - 1, i));
+  const s = S[i];
+  k = Math.max(0, Math.min(s.n - 1, k));
+  if (i !== cur) {
+    if (cur >= 0) { S[cur].el.classList.remove("cur"); }
+    applyStep(s, -1, 0);
+    s.el.classList.add("cur");
+    void s.el.offsetWidth;
+    cur = i;
+    applyStep(s, k, dir >= 0 ? 1 : -1);
+  } else if (k !== s.k) {
+    applyStep(s, k, dir);
+  }
+  update();
+}
+const next = () => { const s = S[cur]; if (s.k < s.n - 1) go(cur, s.k + 1, 1); else if (cur < S.length - 1) go(cur + 1, 0, 1); };
+const prev = () => { const s = S[cur]; if (s.k > 0) go(cur, s.k - 1, -1); else if (cur > 0) go(cur - 1, S[cur - 1].n - 1, -1); };
+const nextSlide = () => cur < S.length - 1 && go(cur + 1, 0, 1);
+const prevSlide = () => cur > 0 && go(cur - 1, 0, -1);
+
+const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+function update() {
+  const s = S[cur];
+  $("count").textContent = `${cur + 1} / ${S.length}`;
+  const nn = s.ch ? `${String(s.ch).padStart(2, "0")} ${CHAPTERS[s.ch - 1][0]}` : "";
+  $("where-title").textContent = s.card || !s.ch ? (nn || s.title) : `${nn} / ${s.title}`;
+  const pips = $("pips");
+  pips.innerHTML = s.n > 1 ? Array.from({ length: s.n }, (_, j) => `<button class="${j < s.k ? "done" : j === s.k ? "cur" : ""}" aria-label="Step ${j + 1} of ${s.n}" ${j === s.k ? 'aria-current="step"' : ""} data-step="${j}"></button>`).join("") : "";
+  if (VIDEO) {
+    const at = (s.at || 0) + (s.times ? s.times[Math.max(0, s.k)] || 0 : 0);
+    const w = $("b-watch"); w.href = `${VIDEO}#t=${at.toFixed(1)}`; w.title = `Open the video at ${fmt(at)} (W)`;
+  }
+  const done = cur + (s.n > 1 ? s.k / s.n : 0);
+  $("progress").style.width = `${((done + (s.n > 1 ? 1 / s.n : 1)) / S.length) * 100}%`;
+  $("notes-text").textContent = s.notes || "";
+  document.querySelectorAll("#toc a[data-i]").forEach((a) => a.setAttribute("aria-current", +a.dataset.i === cur ? "true" : "false"));
+  const hash = `#${s.id}${s.n > 1 ? `/${s.k + 1}` : ""}`;
+  if (location.hash !== hash) history.replaceState(null, "", hash);
+  $("live").textContent = `${s.title}${s.n > 1 ? `, step ${s.k + 1} of ${s.n}` : ""}. ${s.caps && s.caps[s.k] ? s.caps[s.k].replace(/`/g, "") : ""}`;
+  document.title = `${s.title} - ${DECK_TITLE}`;
+}
+
+function fromHash() {
+  const [id, st] = decodeURIComponent(location.hash.slice(1)).split("/");
+  const i = S.findIndex((s) => s.id === id);
+  return i < 0 ? null : { i, k: st ? (parseInt(st, 10) || 1) - 1 : 0 };
+}
+
+/* ---------- outline ---------- */
+(function buildToc() {
+  const toc = $("toc");
+  let html = `<li class="chap"><a href="#title" data-i="0"><span class="n">00</span><span>Title</span></a></li>`;
+  CHAPTERS.forEach(([title], c) => {
+    const ch = c + 1;
+    const list = S.filter((s) => s.ch === ch);
+    const card = list.find((s) => s.card);
+    if (!card) return;
+    html += `<li class="chap"><a href="#${card.id}" data-i="${card.i}" data-ch="${ch}"><span class="n">${String(ch).padStart(2, "0")}</span><span>${esc(title)}</span></a>
+      <ol>${list.filter((s) => !s.card).map((s) => `<li><a href="#${s.id}" data-i="${s.i}">${esc(s.title)}</a></li>`).join("")}</ol></li>`;
+  });
+  toc.innerHTML = html;
+})();
+
+function toggleSide(force) {
+  const open = force ?? !root.classList.contains("side-open");
+  root.classList.toggle("side-open", open);
+  $("b-side").setAttribute("aria-pressed", String(open));
+  $("side").setAttribute("aria-hidden", String(!open));
+  if (open) {
+    const a = document.querySelector(`#toc a[data-i="${cur}"]`);
+    if (a) { a.scrollIntoView({ block: "center" }); a.focus({ preventScroll: true }); }
+  }
+  setTimeout(fit, 270);
+}
+function toggleNotes(force) {
+  const open = force ?? !root.classList.contains("notes-open");
+  root.classList.toggle("notes-open", open);
+  $("b-notes").setAttribute("aria-pressed", String(open));
+  try { localStorage.setItem(NOTES_KEY, open ? "1" : "0"); } catch {}
+  fit();
+}
+
+/* ---------- fit ---------- */
+function fit() {
+  if (root.classList.contains("flow")) {
+    const w = stage.clientWidth - 28;
+    const fs = Math.max(0.5, Math.min(1, w / 1920));
+    root.style.setProperty("--fs", fs);
+    return;
+  }
+  const r = view.getBoundingClientRect();
+  const pad = standalone ? 28 : 0;
+  const s = Math.min((r.width - 2 * pad) / 1920, (r.height - 2 * pad) / 1080);
+  stage.style.setProperty("--s", Math.max(0.1, s));
+}
+new ResizeObserver(fit).observe(view);
+
+function setMode() {
+  const flow = narrow.matches;
+  root.classList.toggle("flow", flow);
+  root.classList.toggle("deck", !flow);
+  if (flow) {
+    root.classList.add("noanim");
+    S.forEach((s) => applyStep(s, s.n - 1, 0));
+  } else {
+    root.classList.remove("noanim");
+    const h = fromHash() || { i: Math.max(0, cur), k: 0 };
+    cur = -1;
+    S.forEach((s) => s.el.classList.remove("cur"));
+    go(h.i, h.k, 0);
+  }
+  fit();
+}
+narrow.addEventListener("change", setMode);
+
+/* ---------- input ---------- */
+document.addEventListener("keydown", (e) => {
+  if (root.classList.contains("flow")) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const help = $("help");
+  if (help.open) { if (e.key === "?") { help.close(); e.preventDefault(); } return; }
+  const k = e.key;
+  const inSide = e.target.closest && e.target.closest("#side");
+  if ((k === " " || k === "Enter") && e.target.closest && e.target.closest("a,button")) return;
+  if (k === "ArrowRight" || k === "PageDown" || (k === " " && !e.shiftKey) || k === "Enter") { e.shiftKey && k === "ArrowRight" ? nextSlide() : next(); }
+  else if (k === "ArrowLeft" || k === "PageUp" || k === "Backspace" || (k === " " && e.shiftKey)) { e.shiftKey && k === "ArrowLeft" ? prevSlide() : prev(); }
+  else if (k === "ArrowDown" && !inSide) next();
+  else if (k === "ArrowUp" && !inSide) prev();
+  else if (k === "Home") go(0, 0, -1);
+  else if (k === "End") go(S.length - 1, 0, 1);
+  else if (/^[0-9]$/.test(k)) { const i = S.findIndex((s) => s.id === (k === "0" ? "title" : `ch${k}`)); if (i < 0) return; go(i, 0, 1); }
+  else if (k === "o" || k === "O") toggleSide();
+  else if (k === "n" || k === "N") toggleNotes();
+  else if ((k === "w" || k === "W") && VIDEO) window.open($("b-watch").href, "_blank", "noopener");
+  else if (k === "?") help.showModal();
+  else if (k === "Escape") { if (root.classList.contains("side-open")) toggleSide(false); else return; }
+  else return;
+  e.preventDefault();
+});
+
+$("b-next").addEventListener("click", next);
+$("b-prev").addEventListener("click", prev);
+$("b-side").addEventListener("click", () => toggleSide());
+$("b-notes").addEventListener("click", () => toggleNotes());
+$("b-help").addEventListener("click", () => $("help").showModal());
+$("pips").addEventListener("click", (e) => { const b = e.target.closest("button[data-step]"); if (b) go(cur, +b.dataset.step, +b.dataset.step > S[cur].k ? 1 : -1); });
+window.addEventListener("hashchange", () => { const h = fromHash(); if (h && (h.i !== cur || h.k !== S[cur].k)) go(h.i, h.k, h.i >= cur ? 1 : -1); });
+
+view.addEventListener("click", (e) => {
+  if (root.classList.contains("flow")) return;
+  if (e.target.closest("a,button")) return;
+  if (String(getSelection())) return;
+  const r = view.getBoundingClientRect();
+  (e.clientX - r.left < r.width / 3 ? prev : next)();
+});
+let touch = null;
+view.addEventListener("touchstart", (e) => { if (e.touches.length === 1) touch = [e.touches[0].clientX, e.touches[0].clientY]; }, { passive: true });
+view.addEventListener("touchend", (e) => {
+  if (!touch || root.classList.contains("flow")) return;
+  const dx = e.changedTouches[0].clientX - touch[0], dy = e.changedTouches[0].clientY - touch[1];
+  touch = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { (dx < 0 ? next : prev)(); e.preventDefault(); }
+});
+
+/* ---------- start ---------- */
+try { if (localStorage.getItem(NOTES_KEY) === "1") toggleNotes(true); } catch {}
+$("side").setAttribute("aria-hidden", "true");
+setMode();
+// For screenshot tools: the slide list and a way to jump to any step without animation.
+window.deck = { slides: S.map((s) => ({ id: s.id, steps: s.n })), go: (i, k) => go(i, k, 0) };
+</script>
+</body>
+</html>
