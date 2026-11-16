@@ -65,10 +65,12 @@ def validate(data):
             errors.append(f"Missing adapted upstream file: {path}")
     upstream_skills = {destination(name).split("/")[1] for name in sources if name.startswith("skills/") and name.count("/") == 2 and name.endswith("/SKILL.md")}
     installed_skills = {p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md")}
-    if installed_skills != upstream_skills | {"under-the-hood"}:
-        errors.append(f"Skill inventory mismatch: missing {sorted(upstream_skills - installed_skills)}, extra {sorted(installed_skills - upstream_skills - {'under-the-hood'})}")
-    if "skills/under-the-hood/SKILL.md" in sources:
-        errors.append("The local under-the-hood skill must remain outside upstream synchronization.")
+    local_skills = {"under-the-hood", "create-slideshow"}
+    if installed_skills != upstream_skills | local_skills:
+        errors.append(f"Skill inventory mismatch: missing {sorted(upstream_skills - installed_skills)}, extra {sorted(installed_skills - upstream_skills - local_skills)}")
+    for name in sorted(local_skills):
+        if f"skills/{name}/SKILL.md" in sources:
+            errors.append(f"The local {name} skill must remain outside upstream synchronization.")
     return errors
 
 

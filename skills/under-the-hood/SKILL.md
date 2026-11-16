@@ -1,19 +1,20 @@
 ---
 name: "under-the-hood"
-description: "Explain a PR, branch, or subsystem through its data shapes, runtime flow, and state transitions in an interactive HTML slideshow. Use for code walkthroughs, onboarding, design reviews, or whiteboard preparation."
+description: "Explain a PR, branch, or subsystem through its data shapes, runtime flow, and state transitions, then hand the verified outline to a presentation skill (an interactive slideshow by default). Use for code walkthroughs, onboarding, design reviews, or whiteboard preparation."
 metadata:
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
 # Under the hood
 
-Create an interactive slideshow that prepares the reader to explain how the target works, why its design makes sense, and where it fails. Start with the system's purpose, then connect each detail to that context.
+Build an explanation that prepares the reader to explain how the target works, why its design makes sense, and where it fails. Start with the system's purpose, then connect each detail to that context.
 
 Use the target's own concepts. A command-line tool, library, user interface, service, and background worker may need different explanations. Include state machines, external calls, persistence, concurrency, or costly operations only where the code supports them.
 
 ## Ground rules
 
 - Keep the target source read-only. Write explanation artifacts separately.
+- Own the content, not the presentation. Research and outline here; let the presentation skill handle layout, navigation, and rendering.
 - Trace implementation claims to source files and lines. Distinguish observed behavior from inferred intent. Report disagreements between code and descriptions.
 - Use representative tests and fixtures for worked examples. Access production data only with explicit approval.
 - Define domain terms on first use. Adapt the explanation to the reader's experience and goal.
@@ -24,7 +25,7 @@ Use the target's own concepts. A command-line tool, library, user interface, ser
 
 Identify the target, the reader's goal, and the intended depth from the request and available context. Ask once for any missing information that prevents useful work.
 
-The target may be a PR, a stack, a branch, a subsystem, or a proposed design. For a proposal, distinguish intended behavior from existing implementation. Deliver an interactive HTML slideshow by default.
+The target may be a PR, a stack, a branch, a subsystem, or a proposed design. For a proposal, distinguish intended behavior from existing implementation. Note the output format the user wants; an interactive slideshow is the default.
 
 ## Step 2: Research
 
@@ -69,27 +70,23 @@ Move from the broad context toward the details. Select and reorder chapters to f
 9. One value or operation traced end to end.
 10. Whiteboard questions about alternatives, assumptions, misuse, and failure.
 
-Record the evidence for each chapter before building the slides. Connect each detailed chapter back to the larger flow.
+Record the evidence for each chapter before presenting it. Connect each detailed chapter back to the larger flow.
 
-## Step 5: Build and verify
+## Step 5: Present
 
-Start from [assets/slideshow/](assets/slideshow/). Copy the folder to `<artifact>/src` and read the engine instructions at the top of `deck.html`'s script.
+Hand the outline to a presentation skill. Use [create-slideshow](../create-slideshow/SKILL.md) by default. If the user asked for another format, such as a video or a written document, use the skill for that format instead. This skill decides what the explanation says; the presentation skill decides how it looks and behaves.
 
-The template is a gallery of fictional software examples. Reuse its layouts, navigation, and step engine. Replace all sample content and source captions with verified material from the target, and delete layouts you do not need. Its example task queue, states, storage operations, and transformations prescribe no architecture for the target.
+Give the presentation skill everything it needs to work without reading the target:
 
-Build with `node src/build.mjs`. The result is one offline `index.html` with embedded fonts and no network dependencies.
+- The reader, their goal, and the depth they need.
+- The chapter outline, with one idea per unit (a slide, a scene, a section) and the order in which its pieces should appear.
+- The diagrams from Step 3, named by kind (flow, state machine, lifecycle, decision tree, data journey), with their nodes, transitions, triggers, and guards.
+- Short verbatim code excerpts, each captioned `path:line`, with omissions marked and the lines to highlight at each step. Mark them as code.
+- Representative values from tests or fixtures for any worked example.
+- Speaker notes, and the whiteboard questions with their answers and citations.
+- Which claims are inferred rather than observed, and any disagreements between code and descriptions.
 
-Keep these presentation behaviors:
-
-- Render a fixed-size slide canvas scaled to the window. Each slide must render entirely from its slide and step number so back navigation, reloads, and deep links reproduce the same state.
-- Step through builds with arrow keys or space. Support whole-slide navigation, a toggleable outline, a progress indicator, keyboard help, and slide-and-step URL hashes.
-- Use SVG or HTML diagrams with progressive highlights and labelled data movement. Use selectable code with line highlights and source captions.
-- Include speaker notes and questions whose answers appear on the next step.
-- Keep the dark theme, minimal visual clutter, reduced-motion support, and narrow-screen fallback.
-
-Run `node src/shoot.mjs` from a directory where Playwright resolves. It captures each slide and build step, reports console errors, and checks code-panel width. If the pinned browser is unavailable, use an installed cached Chromium. Inspect every image and fix clipping, overlap, unreadable text, and misleading reveal order. Check navigation, deep links, and the narrow-screen layout as well.
-
-Finish with a working offline artifact whose claims are supported by the target, with uncertainty stated explicitly.
+Once the artifact is built, check that it kept every `path:line` caption and every uncertainty you handed over. Fix anything the presentation step changed in meaning.
 
 ## Step 6: Report
 

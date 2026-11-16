@@ -3,17 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Subsystem: under the hood</title>
+<title>Parcel delivery: a template gallery</title>
 <!--
-  Template for an under-the-hood slideshow. Copy this folder to <project>/src,
-  replace the example slides with your own, then build one offline file:
+  Template for a step-through slideshow on any subject. Copy this folder to
+  <project>/src, replace the example slides with your own, then build one
+  offline file:
 
     node src/build.mjs          # writes <project>/index.html with the fonts inlined
     node src/shoot.mjs          # screenshots every slide and step into <project>/shots
 
-  The example slides are a pattern gallery, not an outline. Each shows one way
-  to draw something (a flow, code, a state machine, a decision, a lifecycle, a
-  journey, a whiteboard question). Keep the patterns that fit; delete the rest.
+  The example slides are a pattern gallery, not an outline. They all describe a
+  fictional parcel delivery service, and each shows one way to draw something
+  (a flow, a quoted excerpt, a sequence of states, a decision, a lifecycle, a
+  journey, a check-yourself question). Keep the patterns that fit; delete the rest.
   The shell (theme, navigation, step engine, outline, notes, narrow fallback)
   should not need changes.
 -->
@@ -175,17 +177,18 @@ svg .off{transform:translateY(18px)}
 .carry .cv{display:inline-block;font:500 26px var(--mono);color:var(--bg);background:var(--text);border-radius:21px;padding:4px 16px}
 .carry .cv:empty{display:none}
 
-/* code panels: real selectable text; a band slides to the step's lines */
-.code{position:absolute;background:var(--panel);border:1.5px solid var(--strong);border-radius:14px}
-.code::before{content:"";position:absolute;left:0;right:0;top:51px;border-top:1.5px solid var(--line)}
-.code .file{position:absolute;left:28px;top:0;height:52px;line-height:54px;font:400 24px var(--mono);color:var(--faint);white-space:nowrap}
-.code .lines{position:absolute;left:32px;right:12px;top:62px}
-.code .ln{height:36px;line-height:36px;white-space:pre;font:500 24px var(--mono);color:var(--text);transition:opacity .4s ease;position:relative}
-.code.has-step .ln{opacity:.42}
-.code .ln.hl{opacity:1}
-.code .band{position:absolute;left:6px;right:6px;border-radius:6px;background:#1f1f1f;opacity:0;transition:top .45s cubic-bezier(.2,.8,.2,1),height .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
-.code .band::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px;background:var(--text)}
-.code .band.on{opacity:1}
+/* excerpt panels: real selectable text (prose, data, or code); a band slides to the step's lines */
+.excerpt{position:absolute;background:var(--panel);border:1.5px solid var(--strong);border-radius:14px}
+.excerpt::before{content:"";position:absolute;left:0;right:0;top:51px;border-top:1.5px solid var(--line)}
+.excerpt .file{position:absolute;left:28px;top:0;height:52px;line-height:54px;font:400 24px var(--mono);color:var(--faint);white-space:nowrap}
+.excerpt .lines{position:absolute;left:32px;right:12px;top:62px}
+.excerpt .ln{height:36px;line-height:36px;white-space:pre;font:500 24px var(--mono);color:var(--text);transition:opacity .4s ease;position:relative}
+.excerpt.has-step .ln{opacity:.42}
+.excerpt .ln.hl{opacity:1}
+.excerpt .band{position:absolute;left:6px;right:6px;border-radius:6px;background:#1f1f1f;opacity:0;transition:top .45s cubic-bezier(.2,.8,.2,1),height .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.excerpt .band::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px;background:var(--text)}
+.excerpt .band.on{opacity:1}
+.excerpt.prose .ln{font:400 26px var(--sans)}
 .k{color:#fff;font-weight:600}.ty{color:#d8d8d8}.str{color:#b9b9b9}.num{color:#e6e6e6}.com{color:#8e8e8e;font-weight:400}.pun{color:#9d9d9d}
 
 /* journey */
@@ -210,7 +213,7 @@ svg .off{transform:translateY(18px)}
 .watch span{color:var(--muted);font-family:var(--mono);font-size:26px}
 .inside{position:absolute;left:166px;top:850px;width:1600px;font:400 26px/1.5 var(--sans);color:var(--faint)}
 
-/* whiteboard */
+/* check-yourself questions */
 .wq{position:absolute;left:120px;top:322px;width:1680px;font:600 64px/1.15 var(--sans);letter-spacing:-1.5px;color:var(--text);margin:0}
 .wa{position:absolute;left:120px;top:478px;width:1500px;font:500 44px/1.3 var(--sans);color:var(--text);margin:0}
 .wa.warn{color:var(--accent)}
@@ -300,12 +303,12 @@ svg .off{transform:translateY(18px)}
      html()   returns the slide's markup, drawn on a 1920x1080 canvas
      caps     one caption per build step; its length is the step count
      steps    the step count, for a slide without captions
-     code     per step, [panelIndex, firstLine, lastLine] to highlight (0-based)
+     excerpt  per step, [panelIndex, firstLine, lastLine] to highlight (0-based)
      packets  per step, { id, pts, label, red?, ms? } or null: a labelled pill
               travels the polyline pts when stepping forward
      carry    per step, the text of the .carry .cv pill (what a hop carries)
      cap      { x, y, w } to move the caption
-     notes    speaker notes (N): one or two sentences to say at a whiteboard
+     notes    speaker notes (N): one or two sentences to say out loud
      flow     [question, answer, cite]: narrow-screen text for a Q/A slide
      at,times video seconds for the slide and each step, used only with VIDEO
 
@@ -319,23 +322,28 @@ svg .off{transform:translateY(18px)}
    Every slide renders from its step number alone, so going back, reloading
    and deep links land on the same state. Keep no state between steps.
 
+   Excerpt panels: panel({ x, y, w, file, lines, prose?, syntax?, pad? }).
+   `file` is the source caption. `prose: true` sets the lines in the sans face
+   for quoted sentences; leave it off for anything aligned in columns (tables,
+   forms, code), and add `syntax: true` to tint code. Lines never wrap: break them yourself.
+
    Canvas grid: margins at x=120 and x=1800, the chapter header at y=64, content
    from y=150, the caption at y=922. Text is at least 24px. A mono character at
    24px is MONO_CW wide; size boxes from that, never by eye.
    ====================================================================== */
-const DECK_TITLE = "Subsystem: under the hood";
+const DECK_TITLE = "Parcel delivery: a template gallery";
 const VIDEO = null; // or "file:///abs/path/video.mp4": adds Watch links that open it at each slide's `at`
 const C = { text:"#ededed", bg:"#0b0b0b" };
 
 // [title, subtitle, video seconds]
 const CHAPTERS = [
-  ["Flow diagram", "Who produces what, and what reads it", 0],
-  ["Code panels", "Selectable code, highlighted one step at a time", 0],
-  ["State machine", "One hop per click, with what each hop carries", 0],
+  ["Flow diagram", "Where things come from, and what collects them", 0],
+  ["Excerpt panels", "Quote the source, one highlighted band at a time", 0],
+  ["Sequence", "One hop per click, with what each hop carries", 0],
   ["Decision", "Questions in a row, each case taking its own path", 0],
   ["Lifecycle", "Several units through the same columns of states", 0],
   ["Journey", "One value through every stage", 0],
-  ["At the whiteboard", "The question first, the answer on the next step", 0],
+  ["Check yourself", "The question first, the answer on the next step", 0],
 ];
 
 /* ---------- small helpers ---------- */
@@ -386,7 +394,7 @@ const ring = (n, label, attrs = "") => `<g ${attrs}>
 const svg = (inner, label = "") => `<svg class="layer" viewBox="0 0 1920 1080" ${label ? `role="img" aria-label="${esc(label)}"` : `aria-hidden="true"`}>${inner}</svg>`;
 const t = (x, y, s, cls = "lbl", attrs = "") => `<text class="${cls}" x="${x}" y="${y}" ${attrs}>${esc(s)}</text>`;
 
-/* ---------- syntax tint, monochrome ---------- */
+/* ---------- syntax tint for code excerpts, monochrome ---------- */
 const KW = new Set("export const let function async await return if else for of in new try catch throw type typeof readonly extends true false null undefined this break continue".split(" "));
 function tint(line) {
   if (!line.trim()) return " ";
@@ -406,22 +414,24 @@ function tint(line) {
   return out;
 }
 
-// A code panel. Height follows the line count; `pad` keeps panels on sibling slides the same height.
+// An excerpt panel. Height follows the line count; `pad` keeps panels on sibling slides the same height.
 function panel(p) {
   const lines = p.lines.slice();
   while (p.pad && lines.length < p.pad) lines.push("");
   const h = 60 + lines.length * 36 + 20;
-  return `<div class="code" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${h}px">
+  const line = (l) => (p.syntax ? tint(l) : esc(l) || " ");
+  return `<div class="excerpt${p.prose ? " prose" : ""}" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${h}px">
     <div class="file">${esc(p.file)}</div><div class="band"></div>
-    <div class="lines">${lines.map((l) => `<div class="ln">${tint(l)}</div>`).join("")}</div></div>`;
+    <div class="lines">${lines.map((l) => `<div class="ln">${line(l)}</div>`).join("")}</div></div>`;
 }
 
 const hdr = (ch) => `<div class="hdr"><span class="hn">${String(ch).padStart(2, "0")}</span><span class="ht">${esc(CHAPTERS[ch - 1][0])}</span></div>
   <div class="rail" style="width:${Math.min(55 * CHAPTERS.length + 8 * (CHAPTERS.length - 1), 560)}px">${CHAPTERS.map((_, i) => `<i class="${i + 1 < ch ? "p" : i + 1 === ch ? "c" : ""}"></i>`).join("")}</div>`;
 
 /* ======================================================================
-   Slides. All examples are fictional: replace them with verified target code.
-   Labels in the examples say what kind of thing goes where.
+   Slides. Every example is about a fictional parcel delivery service:
+   replace all of it with your own verified content. Labels in the
+   examples say what kind of thing goes where.
    ====================================================================== */
 const S = [];
 const add = (s) => S.push(s);
@@ -429,13 +439,13 @@ const add = (s) => S.push(s);
 /* ---------- Title ---------- */
 add({
   id: "title", ch: 0, title: DECK_TITLE, at: 0,
-  notes: "What this system does and why it exists, in one sentence. Then the chapters, in order.",
+  notes: "What this deck explains and why it matters, in one sentence. Then the chapters, in order.",
   html: () => svg(`
-    <text x="160" y="430" style="font-size:132px;font-weight:600;letter-spacing:-4px;fill:var(--text)">Subsystem name</text>
-    <text x="164" y="520" style="font-size:46px;font-weight:400;fill:var(--muted)">Under the hood: the shapes, the calls, and the state machine</text>
+    <text x="160" y="430" style="font-size:132px;font-weight:600;letter-spacing:-4px;fill:var(--text)">Deck title</text>
+    <text x="164" y="520" style="font-size:46px;font-weight:400;fill:var(--muted)">One line on what the reader will understand by the end</text>
     <rect x="164" y="590" width="1300" height="2" fill="#4a4a4a"/>
-    <text x="164" y="680" style="font-size:38px;font-weight:500;fill:var(--text)">Illustrative examples. Replace with code from your target.</text>
-    <text x="164" y="740" class="m" style="font-size:24px;fill:var(--faint)">Template gallery: flow, types, states, decisions, and data transformations</text>
+    <text x="164" y="680" style="font-size:38px;font-weight:500;fill:var(--text)">Illustrative examples about a fictional parcel service. Replace them.</text>
+    <text x="164" y="740" class="m" style="font-size:24px;fill:var(--faint)">Template gallery: flow, excerpts, sequence, decision, lifecycle, journey, and questions</text>
     <text x="164" y="960" style="font-size:26px;font-weight:500;fill:var(--faint)">Right arrow or Space to step through.  O for the outline.  N for notes.  ? for every key.</text>`, DECK_TITLE),
 });
 
@@ -455,141 +465,134 @@ function card(n, inside) {
   });
 }
 
-/* ---------- 1. Flow diagram: existing producers, what they store, what the change reads ---------- */
-card(1, { list: "producers, what they store, and what the change reads", notes: "Start with what already exists and what the change reuses, before anything new." });
+/* ---------- 1. Flow diagram: sources, what they leave behind, and the one place that collects it ---------- */
+card(1, { list: "the sources, what each one leaves behind, and what collects it", notes: "Start with what already exists and what gets reused, before anything new." });
 
 {
-  const PRODUCERS = [
-    N(120, 200, 520, 104, "Producer A", "what it computes"),
-    N(120, 340, 520, 104, "Producer B", "what it computes"),
-    N(120, 480, 520, 104, "Producer C", "what it computes"),
+  const SOURCES = [
+    N(120, 200, 520, 104, "Supplier A", "packs its own orders"),
+    N(120, 340, 520, 104, "Supplier B", "packs its own orders"),
+    N(120, 480, 520, 104, "Supplier C", "packs its own orders"),
   ];
-  const STORED = ["output_a", "output_b", "output_b, output_c"];
-  const READER = N(1300, 340, 500, 104, "readInput(data)", "one input object", true);
-  const ADDS = [N(1300, 580, 500, 96, "New step one", "a local transformation"), N(1300, 696, 500, 96, "New step two", "an external request")];
+  const LEFT = ["parcels at dock 1", "parcels at dock 2", "parcels at docks 2, 3"];
+  const HUB = N(1300, 340, 500, 104, "Sorting hub", "one intake for every dock");
+  const ADDS = [N(1300, 580, 500, 96, "Label check", "a quick local step"), N(1300, 696, 500, 96, "Courier handoff", "an outside party")];
   add({
-    id: "flow", ch: 1, title: "Produced once, reused later",
+    id: "flow", ch: 1, title: "Packed once, collected later",
     caps: [
-      "The existing system computes each output once and stores it.",
-      "The change reads those stored outputs through one function. Nothing is computed twice.",
-      "It never calls Producer B again. Say what is reused and what is called, precisely.",
-      "What it adds is its own work: name each piece and what it costs.",
+      "Each supplier packs its orders once and leaves them at a dock.",
+      "The sorting hub collects from every dock through one intake. Nothing is packed twice.",
+      "It never asks Supplier B to repack. Say exactly what is reused and what is redone.",
+      "What the hub adds is its own work: name each piece and what it costs.",
     ],
-    notes: "Each producer runs once and stores its output. The change reads the stored outputs through one function and never calls the producers again; what it adds is two small steps of its own.",
+    notes: "Each supplier packs once and leaves parcels at a dock. The hub collects them through one intake and never asks for a repack; what it adds is two small steps of its own.",
     html: () => hdr(1) + svg(`
-      ${t(120, 180, "Existing system")}
-      ${t(730, 180, "Stored outputs")}
-      ${t(1300, 320, "The change", "lbl", 'data-on="1+"')}
+      ${t(120, 180, "Sources")}
+      ${t(730, 180, "What they leave behind")}
+      ${t(1300, 320, "The collector", "lbl", 'data-on="1+"')}
       ${t(1300, 560, "What it adds", "lbl", 'data-on="3+"')}
-      ${PRODUCERS.map((n, i) => {
+      ${SOURCES.map((n, i) => {
         const cy = n.y + n.h / 2;
-        return arrow([Rp(n), [730, cy]], "", "muted lit") + chip(730, cy - 32, 490, STORED[i], "", "m strong", 64);
+        return arrow([Rp(n), [730, cy]], "", "muted lit") + chip(730, cy - 32, 490, LEFT[i], "", "strong", 64);
       }).join("")}
-      ${PRODUCERS.map((n, k) => {
-        const cy = n.y + n.h / 2, ty = READER.y + 30 + k * 22;
+      ${SOURCES.map((n, k) => {
+        const cy = n.y + n.h / 2, ty = HUB.y + 30 + k * 22;
         return arrow([[1220, cy], [1260, cy], [1260, ty], [1300, ty]], 'data-on="1+" data-c="lit@1+"');
       }).join("")}
-      ${PRODUCERS.map((n) => node(n)).join("")}
-      ${ring(PRODUCERS[1], "never called again", 'data-on="2+"')}
-      ${node(READER, 'data-on="1+"', "strong")}
+      ${SOURCES.map((n) => node(n)).join("")}
+      ${ring(SOURCES[1], "never asked again", 'data-on="2+"')}
+      ${node(HUB, 'data-on="1+"', "strong")}
       ${ADDS.map((n) => node(n, 'data-on="3+"', "muted")).join("")}
-    `, "Producers store their output; the change reads it through one function"),
+    `, "Suppliers leave parcels at docks; the hub collects them through one intake"),
   });
 }
 
-/* ---------- 2. Code panels: one panel with lit chips, then two panels side by side ---------- */
-card(2, { list: "an entry point line by line; the core types", notes: "Illustrative code. One idea per highlighted band." });
+/* ---------- 2. Excerpt panels: one quoted source with lit chips, then two sources side by side ---------- */
+card(2, { list: "a policy read line by line; two services compared", notes: "Quote the source itself. One idea per highlighted band." });
 
 add({
-  id: "code", ch: 2, title: "handle(): parse, enqueue, reply",
-  code: [[0, 0, 0], [0, 1, 2], [0, 3, 3], [0, 5, 6], [0, 7, 7]],
+  id: "excerpt", ch: 2, title: "The delivery policy, line by line",
+  excerpt: [[0, 0, 0], [0, 1, 1], [0, 3, 4], [0, 6, 6], [0, 7, 7]],
   caps: [
-    "An illustrative entry point. Replace it with your target's actual code.",
-    "Parse external input, then reject an invalid request.",
-    "The parsed value becomes a task.",
-    "Enqueue the task and build a receipt from its identifier.",
-    "Return the receipt. The worker handles execution separately.",
+    "A parcel is accepted only once its label scans.",
+    "An unreadable label sends it straight back.",
+    "Accepted parcels are sorted by region, and each region's van leaves on a schedule.",
+    "The driver tries the door at most twice.",
+    "After that, the parcel waits at a pickup point.",
   ],
-  notes: "Follow the input through parsing, scheduling, and the reply. Cite the real entry point when adapting this example.",
-  html: () => hdr(2) + panel({ x: 120, y: 170, w: 1100, file: "example/handler.ts", lines: [
-    "export async function handle(raw: unknown) {",
-    "  const parsed = parseTask(raw);",
-    "  if (!parsed.ok) return invalid(parsed.error);",
-    "  const task = parsed.value;",
+  notes: "Read the policy one rule at a time, and name the outcome each rule produces. Cite the real section when adapting this example.",
+  html: () => hdr(2) + panel({ x: 120, y: 170, w: 1100, prose: true, file: "Delivery policy, section 4", lines: [
+    "4.1  A parcel is accepted once its label scans cleanly.",
+    "4.2  An unreadable label sends the parcel back to the sender.",
     "",
-    "  const id = await queue.enqueue(task);",
-    "  const receipt = { id, state: \"queued\" };",
-    "  return accepted(receipt);",
-    "}",
-  ] }) + svg(`${t(1270, 190, "What each step does")}
-    ${["external input", "parse and validate", "task value", "queue and receipt", "reply"].map((name, i) => chip(1270, 210 + i * 70, 530, name, `data-c="lit@${i}"`, "m")).join("")}`, "An illustrative task submission handler"),
+    "4.3  Accepted parcels are sorted by destination region.",
+    "4.4  Each region's van leaves at a fixed time every morning.",
+    "",
+    "4.5  A driver makes at most two delivery attempts.",
+    "4.6  After the second miss, the parcel waits at a pickup point.",
+  ] }) + svg(`${t(1270, 190, "What each rule produces")}
+    ${["accepted", "returned", "sorted and scheduled", "attempted", "held for pickup"].map((name, i) => chip(1270, 210 + i * 70, 530, name, `data-c="lit@${i}"`)).join("")}`, "The delivery policy, section 4"),
 });
 
 add({
-  id: "shapes", ch: 2, title: "Task input and result",
-  code: [[0, 0, 4], [0, 6, 8], [1, 0, 4], [1, 6, 10]],
+  id: "compare", ch: 2, title: "Standard and express, side by side",
+  excerpt: [[0, 0, 2], [1, 0, 2], [0, 4, 5], [1, 4, 7]],
   caps: [
-    "The task holds its identity, payload, and attempt number.",
-    "A union distinguishes parsed data from raw bytes.",
-    "Completion, retry, and failure each carry different data.",
-    "A failure records its code, message, and retry policy.",
+    "Standard service waits for the end-of-day pickup and the overnight sort.",
+    "Express skips both waits, so it arrives the next morning.",
+    "A missed standard parcel goes to a pickup point after two tries.",
+    "Express tries three times, then calls, and costs twice as much for it.",
   ],
-  notes: "Show which data belongs to each state. These fictional types demonstrate the layout; use the target's own types.",
-  html: () => hdr(2) + panel({ x: 120, y: 170, w: 830, file: "example/types.ts", lines: [
-    "type TaskInput = {",
-    "  id: string;",
-    "  payload: Uint8Array;",
-    "  attempt: number;",
-    "};",
+  notes: "Compare the same fields on both sides so the differences stand out. These fictional terms demonstrate the layout; use your own sources.",
+  html: () => hdr(2) + panel({ x: 120, y: 170, w: 830, file: "Standard service", lines: [
+    "Picked up    end of day",
+    "Sorted       overnight",
+    "Delivered    in 2 to 4 days",
     "",
-    "type Payload =",
-    "  | { parsed: true; value: Data }",
-    "  | { parsed: false; raw: Uint8Array };",
-  ] }) + panel({ x: 970, y: 170, w: 830, file: "example/types.ts", lines: [
-    "type TaskResult =",
-    "  | { state: \"completed\"; value: Output }",
-    "  | { state: \"retry\"; delayMs: number }",
-    "  | { state: \"failed\";",
-    "      error: Failure };",
+    "Attempts     2",
+    "Then         pickup point",
+  ] }) + panel({ x: 970, y: 170, w: 830, file: "Express service", lines: [
+    "Picked up    within 2 hours",
+    "Sorted       on arrival",
+    "Delivered    next morning",
     "",
-    "type Failure = {",
-    "  code: string;",
-    "  message: string;",
-    "  retryable: boolean;",
-    "};",
+    "Attempts     3",
+    "Then         a call to the recipient",
+    "",
+    "Price        twice standard",
   ] }),
 });
 
-/* ---------- 3. State machine: a grid of steps, one hop per click, with a packet and a carry pill ---------- */
-card(3, { list: "the run end to end, one hop at a time", notes: "The whole run as a state machine. One hop per click; the pill says what each hop carries." });
+/* ---------- 3. Sequence: a grid of steps, one hop per click, with a packet and a carry pill ---------- */
+card(3, { list: "one parcel from drop-off to signature, one hop at a time", notes: "The whole run as a sequence of states. One hop per click; the pill says what each hop carries." });
 
 {
   const COLS = [120, 550, 980, 1410], ROWS = [170, 365, 600];
-  const rn = (c, r, title, sub, mono) => N(COLS[c], ROWS[r], 390, 100, title, sub, mono);
+  const rn = (c, r, title, sub) => N(COLS[c], ROWS[r], 390, 100, title, sub);
   const RUN = [
-    rn(0, 0, "Caller", "submits a task"),
-    rn(1, 0, "handle()", "parse and validate", true),
-    rn(2, 0, "Queue", "holds pending tasks"),
-    rn(3, 0, "Worker", "takes the next task"),
-    rn(0, 1, "Load", "retrieve task input"),
-    rn(1, 1, "transform()", "prepare the input", true),
-    rn(2, 1, "execute()", "produce the output", true),
-    rn(3, 1, "store()", "persist the result", true),
-    rn(0, 2, "Read request", "look up task status"),
-    rn(1, 2, "Consumer", "uses the output"),
+    rn(0, 0, "Sender", "drops off a parcel"),
+    rn(1, 0, "Counter", "scans the label"),
+    rn(2, 0, "Hub", "sorts by region"),
+    rn(3, 0, "Van", "leaves at 7am"),
+    rn(0, 1, "Route", "stops in order"),
+    rn(1, 1, "Doorstep", "the driver knocks"),
+    rn(2, 1, "Recipient", "signs for it"),
+    rn(3, 1, "Record", "proof of delivery"),
+    rn(0, 2, "Sender", "checks tracking"),
+    rn(1, 2, "Tracking page", "shows the record"),
   ];
   // [what the hop carries, the caption]
   const HOPS = [
-    ["", "The caller submits a task. This example starts here."],
-    ["input", "The handler parses external input into a task."],
-    ["Task", "The queue stores the task until a worker can take it."],
-    ["Task", "The worker claims a pending task."],
-    ["id", "Load the input. A missing task produces an explicit error."],
-    ["Input", "Transform the input into the shape execution expects."],
-    ["Prepared", "Execute the task and produce its output."],
-    ["Output", "Store the result according to the target system's persistence policy."],
-    ["id", "Later, a consumer requests the task's status."],
-    ["Result", "The consumer receives the output and current state."],
+    ["", "The sender drops off a parcel. This run starts here."],
+    ["parcel", "The counter scans the label and accepts the parcel."],
+    ["parcel", "The hub sorts it with everything else bound for the same region."],
+    ["region", "It is loaded onto that region's morning van."],
+    ["route", "The van works through its stops in order."],
+    ["parcel", "The driver reaches the door. No one home means a second try tomorrow."],
+    ["parcel", "The recipient signs for the parcel."],
+    ["signature", "The signature becomes the proof of delivery."],
+    ["tracking no.", "Later, the sender looks up the tracking number."],
+    ["status", "The tracking page shows the delivery record."],
   ];
   const LATER = 8; // drawn dashed: not part of the same run
   const link = (a, b, mid) => Math.abs(a.y - b.y) < 1
@@ -597,53 +600,53 @@ card(3, { list: "the run end to end, one hop at a time", notes: "The whole run a
     : [Bp(a), [Bp(a)[0], mid], [Tp(b)[0], mid], Tp(b)];
   const hopPath = (k) => { const b = RUN[k]; return link(RUN[k - 1], b, b.y - 35); };
   add({
-    id: "run", ch: 3, title: "From submission to consumption",
+    id: "run", ch: 3, title: "From drop-off to signature",
     caps: HOPS.map((h) => h[1]),
-    notes: "Walk the task through submission, execution, persistence, and consumption. Replace these stages with the actual system's boundaries.",
+    notes: "Walk the parcel through each hand-off. Replace these stages with the real ones in your subject.",
     packets: HOPS.map((h, k) => (k ? { id: "run", pts: hopPath(k), label: h[0] } : null)),
     carry: HOPS.map((h, k) => (k ? h[0] : "nothing yet")),
     html: () => hdr(3) + svg(`
       ${RUN.slice(1).map((_, i) => arrow(hopPath(i + 1), `data-c="lit@${i + 1}+ cur@${i + 1}"`, i + 1 === LATER ? "dashed" : "")).join("")}
-      <text x="720" y="553" style="font-size:24px;font-weight:500;fill:var(--faint)">later, when a consumer requests it</text>
-      <g data-on="4+">
-        <line x1="315" y1="465" x2="315" y2="478" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5"/>
-        <rect x="120" y="478" width="560" height="46" rx="10" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="6 5"/>
-        <text x="140" y="509" style="font-size:24px;font-weight:500;fill:var(--muted)">error: missing input</text>
+      <text x="720" y="553" style="font-size:24px;font-weight:500;fill:var(--faint)">later, when the sender checks</text>
+      <g data-on="5+">
+        <line x1="745" y1="465" x2="745" y2="478" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5"/>
+        <rect x="550" y="478" width="400" height="46" rx="10" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <text x="570" y="509" style="font-size:24px;font-weight:500;fill:var(--muted)">no one home: try tomorrow</text>
       </g>
       ${RUN.map((n, k) => node(n, `data-c="reached@${k}+ active@${k}"`)).join("")}
       ${packet("run")}
-      <text x="980" y="636" style="font-size:24px;font-weight:500;fill:var(--faint)">on this hop</text>`, "The run as a state machine")
+      <text x="980" y="636" style="font-size:24px;font-weight:500;fill:var(--faint)">on this hop</text>`, "One parcel's run as a sequence of states")
       + `<div class="carry" style="position:absolute;left:980px;top:652px;width:820px"><span class="cv"></span></div>`,
   });
 }
 
-/* ---------- 4. Decision: a spine of questions, leaves below, one case per step ---------- */
-card(4, { list: "how a request reaches a scheduling decision", notes: "Each step sends one illustrative request down the questions to its destination." });
+/* ---------- 4. Decision: a spine of questions, outcomes below, one case per step ---------- */
+card(4, { list: "how a parcel reaches its outcome", notes: "Each step sends one example parcel down the questions to its outcome." });
 
 {
   const sp = (i, title, sub) => N(120 + i * 440, 230, 340, 120, title, sub);
   const SPINE = [
-    sp(0, "Invalid input?", "does parsing reject\nthe request?"),
-    sp(1, "Allowed?", "may this caller\nsubmit the task?"),
-    sp(2, "Capacity?", "can this system\naccept more work?"),
-    sp(3, "Cached?", "is a reusable result\nalready available?"),
+    sp(0, "Damaged?", "is the box broken\nor leaking?"),
+    sp(1, "Address valid?", "does the street\nexist on a route?"),
+    sp(2, "Fits the van?", "is it under the\nsize limit?"),
+    sp(3, "Someone home?", "does anyone answer\nthe door?"),
   ];
-  const lf = (i, y, title, sub) => N(120 + i * 440, y, 340, 110, title, sub, true);
-  const LEAVES = [
-    lf(0, 470, "invalid", "parse_error"),
-    lf(1, 470, "rejected", "permission_denied"),
-    lf(2, 470, "deferred", "capacity_limit"),
-    lf(3, 470, "completed", "cache_hit"),
-    lf(3, 610, "queued", "cache_miss"),
+  const lf = (i, y, title, sub) => N(120 + i * 440, y, 340, 110, title, sub);
+  const OUTCOMES = [
+    lf(0, 470, "returned", "damaged in transit"),
+    lf(1, 470, "held", "address unknown"),
+    lf(2, 470, "freight", "too large for a van"),
+    lf(3, 470, "delivered", "signed for"),
+    lf(3, 610, "pickup point", "no one home"),
   ];
-  const WARN = [0, 1]; // rejected requests, outlined in the accent color
-  // [packet label, questions visited, destination]: illustrative cases
-  const CASES = [["case one", 1, 0], ["case two", 4, 3], ["case three", 4, 4]];
+  const WARN = [0, 1]; // outcomes that end badly, outlined in the accent color
+  // [packet label, questions visited, outcome]: illustrative cases
+  const CASES = [["parcel one", 1, 0], ["parcel two", 4, 3], ["parcel three", 4, 4]];
   const casePath = (through, leaf) => {
     const y = SPINE[0].y + SPINE[0].h / 2;
     const pts = [[SPINE[0].x + 60, 168], [SPINE[0].x + 60, y]];
     for (const n of SPINE.slice(1, through)) pts.push([n.x + 60, y]);
-    const l = LEAVES[leaf], last = [l.x + 60, y];
+    const l = OUTCOMES[leaf], last = [l.x + 60, y];
     if (Math.abs(pts[pts.length - 1][0] - last[0]) > 1) pts.push(last);
     pts.push([l.x + 60, l.y + 30]);
     return pts;
@@ -652,48 +655,48 @@ card(4, { list: "how a request reaches a scheduling decision", notes: "Each step
   const lands = (l) => CASES.map((c, k) => (c[2] === l ? k : -1)).filter((k) => k >= 0).join(",");
   const last = SPINE[3], SUMMARY = CASES.length;
   add({
-    id: "decision", ch: 4, title: "The scheduling decision",
+    id: "decision", ch: 4, title: "Where a parcel ends up",
     caps: [
-      "Case one stops at the first question because parsing failed.",
-      "Case two is allowed, capacity is available, and a cached result exists.",
-      "Case three has no cached result, so the task enters the queue.",
-      "Each decision has an explicit outcome and reason.",
+      "Parcel one stops at the first question because its box is broken.",
+      "Parcel two passes every check, and someone answers the door.",
+      "Parcel three passes every check, but no one is home.",
+      "Every parcel ends with exactly one outcome and a reason.",
     ],
     cap: { y: 950 },
-    notes: "Walk each test case down the questions. Name the guard on each edge and the line that applies it.",
+    notes: "Walk each example down the questions. Name the condition on each edge and the rule that applies it.",
     packets: CASES.map(([label, through, leaf]) => ({ id: "verdict", pts: casePath(through, leaf), label, ms: 700 + through * 450 })).concat([null]),
     html: () => hdr(4) + svg(`
       <circle cx="180" cy="168" r="7" fill="${C.text}"/>
-      <text x="200" y="176" style="font-size:26px;font-weight:500;fill:var(--muted)">a case arrives</text>
+      <text x="200" y="176" style="font-size:26px;font-weight:500;fill:var(--muted)">a parcel arrives</text>
       ${[0, 1, 2].map((i) => arrow([Rp(SPINE[i]), Lp(SPINE[i + 1])]) + `<text class="elabel" x="${SPINE[i].x + 390}" y="278" text-anchor="middle">${i === 0 ? "no" : "yes"}</text>`).join("")}
       ${[[0, 0, "yes"], [1, 1, "no"], [2, 2, "no"], [3, 3, "yes"]].map(([s, l, lab]) => {
-        const a = SPINE[s], b = LEAVES[l], x = b.x + 170;
+        const a = SPINE[s], b = OUTCOMES[l], x = b.x + 170;
         return arrow([[x, a.y + a.h], [x, b.y]]) + `<text class="elabel" x="${x + 10}" y="${a.y + a.h + 34}">${lab}</text>`;
       }).join("")}
-      ${arrow([[last.x + last.w, last.y + last.h - 24], [1840, last.y + last.h - 24], [1840, LEAVES[4].y + 55], [last.x + last.w, LEAVES[4].y + 55]])}
+      ${arrow([[last.x + last.w, last.y + last.h - 24], [1840, last.y + last.h - 24], [1840, OUTCOMES[4].y + 55], [last.x + last.w, OUTCOMES[4].y + 55]])}
       <text class="elabel" x="1828" y="${last.y + last.h + 34}" text-anchor="end">no</text>
       ${SPINE.map((n, i) => node(n, `data-c="reached@${visits(i) || "x"}" style="--d:${(0.2 + i * 0.45).toFixed(2)}s"`, "visit")).join("")}
-      ${LEAVES.map((n, l) => node(n, `data-c="active@${lands(l) || "x"} ${WARN.includes(l) ? "" : `dim@${SUMMARY}`}"`, WARN.includes(l) ? "warn" : "")).join("")}
-      ${packet("verdict")}`, "A scheduling decision flow")
-      + panel({ x: 120, y: 640, w: 1000, file: "example/scheduler.ts", lines: [
-        "export type Decision =",
-        "  | \"invalid\" | \"rejected\" | \"deferred\"",
-        "  | \"completed\" | \"queued\";",
+      ${OUTCOMES.map((n, l) => node(n, `data-c="active@${lands(l) || "x"} ${WARN.includes(l) ? "" : `dim@${SUMMARY}`}"`, WARN.includes(l) ? "warn" : "")).join("")}
+      ${packet("verdict")}`, "How a parcel reaches its outcome")
+      + panel({ x: 120, y: 640, w: 1000, prose: true, file: "Routing rules, section 2", lines: [
+        "2.1  Damaged parcels go back to the sender.",
+        "2.2  Parcels with unknown addresses are held for five days.",
+        "2.3  Oversized parcels travel by freight.",
         "",
-        "// each branch returns a decision and reason",
+        "Each rule names one outcome and the reason for it.",
       ] }),
   });
 }
 
 /* ---------- 5. Lifecycle: columns of states, each unit leaving a trail ---------- */
-card(5, { list: "a unit's life, from created to its final outcome", notes: "Follow several units through the same states. The failure gets the accent." });
+card(5, { list: "a parcel's life, from intake to its final outcome", notes: "Follow several parcels through the same states. The one that goes wrong gets the accent." });
 
 {
-  const COLS = [["Admission", ["queued", "rejected"]], ["Execution", ["running", "waiting", "cancelled"]], ["Result", ["completed", "failed", "cancelled", "retrying"]], ["Next action", ["return", "report", "stop", "enqueue"]]];
+  const COLS = [["Intake", ["accepted", "refused"]], ["Transit", ["on the van", "delayed", "sent back"]], ["Outcome", ["delivered", "missed", "returned", "rescheduled"]], ["Next action", ["close", "leave a notice", "refund", "requeue"]]];
   const xy = (c, r) => [120 + c * 440, 250 + r * 74];
   const W = 340, H = 56;
   // [label, the row it takes in each column]
-  const UNITS = [["a successful task", [0, 0, 0, 0]], ["a failed task", [0, 0, 1, 1]], ["a rejected task", [1, 2, 2, 2]], ["a task to retry", [0, 1, 3, 3]]];
+  const UNITS = [["a delivered parcel", [0, 0, 0, 0]], ["a missed parcel", [0, 0, 1, 1]], ["a refused parcel", [1, 2, 2, 2]], ["a delayed parcel", [0, 1, 3, 3]]];
   const RED = 1;
   const unitPath = (rows) => {
     const pts = [];
@@ -709,15 +712,15 @@ card(5, { list: "a unit's life, from created to its final outcome", notes: "Foll
     return [a, [m, a[1]], [m, b[1]], b];
   });
   add({
-    id: "lifecycle", ch: 5, title: "A unit's life",
+    id: "lifecycle", ch: 5, title: "A parcel's life",
     caps: [
-      "The worker completes a task and returns its output.",
-      "A failed task produces an error report.",
-      "A rejected task stops without execution.",
-      "A waiting task reaches an explicit retry state and returns to the queue.",
-      "Every accepted task reaches a terminal state or an explicit retry.",
+      "A parcel rides the van, is delivered, and its record closes.",
+      "A missed delivery leaves a notice for the recipient.",
+      "A refused parcel goes back without ever riding a van.",
+      "A delayed parcel is rescheduled and rejoins tomorrow's queue.",
+      "Every parcel ends closed, or explicitly back in the queue.",
     ],
-    notes: "Follow success, failure, rejection, and retry separately. Each path makes the next action explicit.",
+    notes: "Follow delivery, a miss, a refusal, and a delay separately. Each path ends in an explicit next action.",
     packets: UNITS.map(([label, rows], u) => ({ id: "unit", pts: unitPath(rows), label, red: u === RED, ms: 1800 })).concat([null]),
     html: () => {
       const [ex, ey] = xy(2, 3), [px, py] = xy(3, 3);
@@ -727,45 +730,45 @@ card(5, { list: "a unit's life, from created to its final outcome", notes: "Foll
           states.map((s, r) => {
             const on = UNITS.map((u, k) => (u[1][c] === r ? k : -1)).filter((k) => k >= 0).join(",");
             const [x, y] = xy(c, r);
-            return node(N(x, y, W, H, s, "", true), on ? `data-c="active@${on}"` : "");
+            return node(N(x, y, W, H, s), on ? `data-c="active@${on}"` : "");
           }).join("")).join("")}
         <g data-on="3"><rect x="${ex - 6}" y="${ey - 6}" width="${W + 12}" height="${H + 12}" rx="16" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
           <rect x="${px - 6}" y="${py - 6}" width="${W + 12}" height="${H + 12}" rx="16" fill="none" stroke="var(--accent)" stroke-width="2.5"/></g>
-        <g data-on="4"><text x="120" y="720" class="m" style="font-size:30px;font-weight:500;fill:var(--text)">terminal state or explicit retry</text>
-          <text x="120" y="762" class="m" style="font-size:24px;fill:var(--faint)">example/types.ts:60</text></g>
-        ${packet("unit")}`, "A unit's life across four stages");
+        <g data-on="4"><text x="120" y="720" style="font-size:30px;font-weight:500;fill:var(--text)">closed, or explicitly back in the queue</text>
+          <text x="120" y="762" class="m" style="font-size:24px;fill:var(--faint)">Delivery policy, section 4.6</text></g>
+        ${packet("unit")}`, "A parcel's life across four stages");
     },
   });
 }
 
 /* ---------- 6. Journey: one value through every stage, one slide per stage ---------- */
-card(6, { list: "one label from input to the final consumer", notes: "One fictional label, through parsing, transformation, storage, and output." });
+card(6, { list: "one address, from a handwritten label to a signature", notes: "One fictional address, through every form it takes on the way to the door." });
 
 {
-  // Each stage: a track label, a title, a cite, the value as this stage holds it, the panel, and two steps.
+  // Each stage: a track label, a title, a source, the value as this stage holds it, the panel, and two steps.
   const STAGES = [
-    { label: "received", title: "The input value", cite: "example/input.ts", here: '\"  Example Task  \"',
-      file: "request.body", lines: ["{", "  id: \"task-1\",", "  label: \"  Example Task  \"", "}"],
-      steps: [[1, 1, "The identifier travels with the value."], [2, 2, "The label arrives with leading and trailing spaces."]],
-      notes: "Start with a fictional input. Replace it with a representative fixture from the target." },
-    { label: "trimmed", title: "Trim the label", cite: "example/normalize.ts", here: '\"Example Task\"',
-      file: "normalize(input)", lines: ["const trimmed = input.label.trim();", "", "// \"  Example Task  \"", "// becomes \"Example Task\""],
-      steps: [[0, 0, "Trimming changes only the surrounding spaces."], [2, 3, "Show the value before and after the transformation."]],
-      notes: "Name the transformation and which parts of the value it preserves." },
-    { label: "keyed", title: "Build a lookup key", cite: "example/key.ts", here: '\"example-task\"',
-      file: "makeKey(trimmed)", lines: ["const key = trimmed", "  .toLowerCase()", "  .replaceAll(\" \", \"-\");", "", "// \"Example Task\" -> \"example-task\""],
-      steps: [[0, 2, "Lowercase the label and replace spaces with hyphens."], [4, 4, "The key becomes the value used for later lookups."]],
-      notes: "Explain why the next consumer needs this representation." },
-    { label: "stored", title: "Store the mapping", cite: "example/store.ts", here: "task-1 -> example-task",
-      file: "store.set(id, key)", lines: ["await store.set(input.id, {", "  key,", "});"],
-      steps: [[0, 0, "Use the original identifier to store the mapping."], [1, 1, "Keep the derived key as the stored value."]],
-      notes: "Show the storage boundary without prescribing a database or write policy." },
-    { label: "returned", title: "Read the key", cite: "example/read.ts", here: '\"example-task\"',
-      file: "read(input.id)", lines: ["const saved = await store.get(input.id);", "return {", "  id: input.id,", "  key: saved.key,", "};"],
-      steps: [[0, 0, "Read the stored mapping with the original identifier."], [2, 3, "Return the identifier and transformed key to the consumer."]],
-      notes: "Show the value as the final consumer receives it." },
+    { label: "written", title: "The handwritten label", cite: "Label photo, counter 3", here: '"12 elm st, apt 4"',
+      file: "Handwritten label", lines: ["To   R. Ortiz", "     12 elm st, apt 4", "     Springfield"],
+      steps: [[0, 0, "The recipient's name travels with the address."], [1, 2, "The address arrives exactly as the sender wrote it."]],
+      notes: "Start with a representative example. Replace it with a real one from your subject." },
+    { label: "typed", title: "Type it in", cite: "Counter procedure, step 2", here: '"12 Elm Street, Apt 4"',
+      file: "Counter clerk", lines: ["Written   12 elm st, apt 4", "", "Typed     12 Elm Street, Apt 4"],
+      steps: [[0, 0, "The clerk reads the handwriting."], [2, 2, "Typing it in standard form changes the spelling, not the place."]],
+      notes: "Name the transformation and what it preserves." },
+    { label: "coded", title: "Give it a route", cite: "Sorting table, region SPR", here: '"SPR-04"',
+      file: "Sorting table", lines: ["Street    Elm Street", "Town      Springfield", "", "Region    SPR", "Route     04"],
+      steps: [[0, 1, "Look up the street and the town."], [3, 4, "The lookup gives a region and a route number."]],
+      notes: "Explain why the next stage needs this form of the value." },
+    { label: "loaded", title: "Put it on the van", cite: "Van manifest, route SPR-04", here: "van SPR-04, stop 17",
+      file: "Van manifest", lines: ["Van SPR, route 04", "", "Stop 16   10 Elm Street", "Stop 17   12 Elm Street, Apt 4", "Stop 18   15 Elm Street"],
+      steps: [[0, 0, "Every parcel on route 04 rides the same van."], [3, 3, "The address becomes a numbered stop."]],
+      notes: "Show where the value sits among its neighbours." },
+    { label: "signed", title: "Sign for it", cite: "Proof of delivery", here: "signed: R. Ortiz",
+      file: "Proof of delivery", lines: ["Stop 17   12 Elm Street, Apt 4", "Signed    R. Ortiz", "Time      10:42"],
+      steps: [[0, 0, "The driver reaches stop 17."], [1, 2, "The signature closes the journey."]],
+      notes: "Show the value as the final stage records it." },
   ];
-  const ROWS = [["Input", '"  Example Task  "'], ["Trimmed", '"Example Task"'], ["Key", '"example-task"']];
+  const ROWS = [["Written", '"12 elm st"'], ["Typed", '"12 Elm Street"'], ["Route", '"SPR-04"']];
   const rowY = (i) => 790 + 112 + i * 40;
 
   // A mark introduced at stage `at`, step `st`: shown on every later stage, and from that step on its own.
@@ -774,7 +777,7 @@ card(6, { list: "one label from input to the final consumer", notes: "One fictio
     const mark = (at, st, body) => { const a = since(n, at, st); return a ? `<g ${a}>${body}</g>` : ""; };
     add({
       id: `j${n + 1}`, ch: 6, title: `${n + 1}. ${g.title} (${g.label})`,
-      code: g.steps.map(([a, b]) => [0, a, b]),
+      excerpt: g.steps.map(([a, b]) => [0, a, b]),
       caps: g.steps.map((s) => s[2]),
       cap: { x: 1300, y: 330, w: 500 },
       notes: g.notes,
@@ -786,30 +789,30 @@ card(6, { list: "one label from input to the final consumer", notes: "One fictio
         + `<div class="jr cite">${esc(g.cite)}</div>`
         + `<div class="strip"></div>`
         + svg(`
-          <text x="148" y="828" style="font-size:24px;font-weight:500;fill:var(--faint)">The example value at each stage</text>
+          <text x="148" y="828" style="font-size:24px;font-weight:500;fill:var(--faint)">The address at each stage</text>
           <g style="font-size:24px;font-weight:500;fill:var(--faint)"><text x="148" y="866">Stage</text><text x="600" y="866" text-anchor="end">Value</text></g>
-          ${ROWS.map(([name, amt], i) => `<g class="m" style="font-size:24px;font-weight:500;fill:var(--text)">
-            <text x="148" y="${rowY(i)}">${name}</text><text x="600" y="${rowY(i)}" text-anchor="end">${amt}</text></g>`).join("")}
-          ${mark(0, 0, `<rect x="${600 - 230 - 8}" y="${rowY(2) - 27}" width="${230 + 16}" height="36" rx="6" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`)}
-          ${mark(2, 1, `<text x="700" y="${rowY(2)}" class="m" style="font-size:26px;font-weight:500;fill:var(--accent)">key created</text>`)}
-          ${mark(4, 1, `<text x="700" y="${rowY(0)}" class="m" style="font-size:26px;font-weight:500;fill:var(--muted)">returned to consumer</text>`)}`, "The transformed label"),
+          ${ROWS.map(([name, val], i) => `<g class="m" style="font-size:24px;font-weight:500;fill:var(--text)">
+            <text x="148" y="${rowY(i)}">${name}</text><text x="600" y="${rowY(i)}" text-anchor="end">${esc(val)}</text></g>`).join("")}
+          ${mark(0, 1, `<rect x="${600 - 170 - 8}" y="${rowY(0) - 27}" width="${170 + 16}" height="36" rx="6" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`)}
+          ${mark(2, 1, `<text x="700" y="${rowY(2)}" class="m" style="font-size:26px;font-weight:500;fill:var(--accent)">route assigned</text>`)}
+          ${mark(4, 1, `<text x="700" y="${rowY(1)}" class="m" style="font-size:26px;font-weight:500;fill:var(--muted)">delivered here</text>`)}`, "The address at each stage"),
     });
   });
 }
 
-/* ---------- 7. At the whiteboard: question, then answer and cite on the next step ---------- */
+/* ---------- 7. Check yourself: question, then answer and source on the next step ---------- */
 card(7, { list: "short answers; say yours, then step to check it", notes: "Try each answer out loud before revealing it." });
 
 {
-  // [question, one-sentence answer, file:line that backs it]. The last one is a known problem, in the accent.
+  // [question, one-sentence answer, the source that backs it]. The last one is a known weakness, in the accent.
   const QA = [
-    ["Why X instead of Y?", "The constraint that decided it, in one sentence.", "example/file.ts:42"],
-    ["What can a malicious actor do?", "The strongest attack, and what stops it or doesn't.", "example/guard.ts:17   example/route.ts:30"],
-    ["Where does it fail?", "The input or state it handles wrong, and what a user would see.", "example/core.ts:210"],
+    ["Why sort at a hub instead of at each supplier?", "One van per region beats one van per supplier: fewer trips, fuller vans.", "Delivery policy, section 4.3"],
+    ["What stops a bad parcel early?", "An unreadable label is sent back at the counter, before it costs a trip.", "Delivery policy, section 4.2"],
+    ["Where does it fail?", "A real but wrong address is delivered to the wrong door, and no rule catches it.", "Routing rules, section 2.2"],
   ];
   QA.forEach(([q, a, cite], i) => {
     add({
-      id: `wb${i + 1}`, ch: 7, title: q, steps: 2,
+      id: `q${i + 1}`, ch: 7, title: q, steps: 2,
       notes: a,
       flow: [q, a, cite],
       html: () => hdr(7) + svg(`${QA.map((_, d) => `<circle class="wbdot ${d < i ? "done" : d === i ? "cur" : ""}" cx="${130 + d * 30}" cy="190" r="8"/>`).join("")}`)
@@ -876,8 +879,8 @@ function applyStep(s, k, dir) {
       e.classList.toggle(c, match(spec, k));
     }
   });
-  const panels = [...el.querySelectorAll(".code")];
-  const step = s.code && k >= 0 ? s.code[k] : null;
+  const panels = [...el.querySelectorAll(".excerpt")];
+  const step = s.excerpt && k >= 0 ? s.excerpt[k] : null;
   panels.forEach((p, pi) => {
     p.classList.toggle("has-step", !!step);
     const lines = p.querySelectorAll(".ln");

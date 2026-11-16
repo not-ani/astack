@@ -55,11 +55,11 @@ for (const [i, s] of slides.entries()) {
     await page.locator("#stage").screenshot({ path: join(out, name) });
     shots += 1;
   }
-  // Code lines wider than their panel run past its border. Only the current slide has layout.
+  // Excerpt lines wider than their panel run past its border. Only the current slide has layout.
   wide.push(...await page.evaluate(() => [...document.querySelectorAll(".sl.cur .ln")]
     .filter((ln) => ln.scrollWidth > ln.clientWidth + 1).map((ln) => `${ln.closest(".sl").id}: ${ln.textContent.trim()}`)));
 }
 await browser.close();
 console.log(`${shots} screenshots of ${slides.length} slides in ${out}`);
-if (wide.length) { console.log(`code lines wider than their panel:\n${wide.join("\n")}`); process.exitCode = 1; }
+if (wide.length) { console.log(`excerpt lines wider than their panel:\n${wide.join("\n")}`); process.exitCode = 1; }
 if (errors.length) { console.log(`console errors:\n${errors.join("\n")}`); process.exitCode = 1; }
